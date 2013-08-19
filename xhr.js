@@ -33,6 +33,7 @@
 
 		function readyStateChange(evt) {
 			var readyState = xhr.readyState, status = xhr.status, params = this.params, callback = this.callback, data;
+			console.log(readyState);
 
 			if ( readyState === 4 ) {
 				try {

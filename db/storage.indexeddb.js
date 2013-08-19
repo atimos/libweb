@@ -7,18 +7,9 @@
 	lib.db.storage = function(config, initcb) {
 		var db, db_instance;
 
-		function parseError(err) {
-			switch ( Object.prototype.toString.call(err) ) {
-			case '[object Event]':
-				err = err.target.error;
-				break;
-			}
-			return err;
-		}
-
 		function createStorage(evt) {
 			(config.store || []).forEach(function(store_config) {
-				var store = evt.currentTarget.result.objectStore(store_config.name, store_config.key);
+				var store = evt.target.result.createObjectStore(store_config.name, store_config.key);
 
 				(store_config.index || []).forEach(function(index_config) {
 					store.createIndex(index_config.name, index_config.keypath, index_config.options);
@@ -27,158 +18,198 @@
 			});
 		}
 
-		function loadTransaction(stores, access, cb) {
-			var transaction = db_instance.transaction(stores, access);
+		function loadStore(store_name) {
+			var transaction,
+				action,
+				index_name,
+				store,
+				access_name,
+				result = [],
+				not_found,
+				item_list = [],
+				sorted_items = [],
+				cursor_fn,
+				range_data,
+				range_object,
+				cursor_name,
+				return_object;
 
-			transaction.oncomplete = function(evt) {
-				cb(parseError(evt), evt);
-			};
-			return transaction;
-		}
+			function runQuery(callback) {
+				try {
+					transaction = db_instance.transaction(store_name, access_name);
 
-		function loadStore(name, index, transaction) {
-			var store = transaction.objectStore(name);
-
-			if ( index ) {
-				store = store.index(index);
-			}
-
-			return store;
-		}
-
-		function checkAgainstQuery(query, key, item) {
-			return true;
-		}
-
-		function getItems(store_name, id_list, cb) {
-			var transaction, store, result = [], not_found = [];
-			try {
-				transaction = loadTransaction(store_name, 'readonly', function(err) {
-					cb(err, result, not_found);
-				});
-
-				store = loadStore(store_name, null, transaction);
-
-				id_list.forEach(function(id) {
-					store.get(id).onsuccess = function(evt) {
-						if ( evt.target.result ) {
-							result.push(evt.target.result);
-						} else {
-							not_found.push(id);
+					transaction.onerror = function(evt) {
+						if ( Object.prototype.toString.call(callback) === '[object Function]' ) {
+							callback(evt.target.error, result, not_found);
 						}
 					};
-				});
-			} catch ( err ) {
-				if ( transaction ) {
-					transaction.oncomplete = null;
-					transaction.abort();
-				}
-				cb(parseError(err));
-			}
-		}
 
-		function setItems(store_name, item_list, cb) {
-			var result = [], transaction, store;
-			try {
-				transaction = loadTransaction(store_name, 'readwrite', function(err) {
-					cb(err, result);
-				});
-
-				store = loadStore(store_name, null, transaction);
-
-				item_list.forEach(function(item) {
-					store.put(item).onsuccess = function(evt) {
-						store.get(evt.target.result).onsuccess = function(evt) {
-							result.push(evt.target.result);
-						};
-					};
-				});
-			} catch ( err ) {
-				if ( transaction ) {
-					transaction.oncomplete = null;
-					transaction.abort();
-				}
-				cb(parseError(err));
-			}
-		}
-
-		function deleteItems(store_name, id_list, cb) {
-			var transaction, store;
-			try {
-				transaction = loadTransaction(store_name, 'readwrite', function(err) {
-					cb(err);
-				});
-
-				store = loadStore(store_name, null, transaction);
-
-				id_list.forEach(function(id) {
-					store.delete(id);
-				});
-			} catch ( err ) {
-				if ( transaction ) {
-					transaction.oncomplete = null;
-					transaction.abort();
-				}
-				cb(parseError(err));
-			}
-		}
-
-		function queryDatabase(store_name, query, cb) {
-			var transaction, result = [], range;
-			try {
-				transaction = loadTransaction(store_name, 'readonly', function(err) {
-					cb(err, result);
-				});
-
-				if ( query.range) {
-					range = window.IDBKeyRange[query.range.type].apply(window, query.range.value);
-				}
-
-				loadStore(store_name, query.index, transaction).openCursor(range, query.cursor || 'next').onsuccess = function(evt) {
-					var cursor = evt.target.result, item;
-
-					if ( cursor ) {
-						if ( item === checkAgainstQuery(query, cursor.key, cursor.value) ) {
-							result.push(cursor.value);
+					transaction.oncomplete = function(evt) {
+						if ( Object.prototype.toString.call(callback) === '[object Function]' ) {
+							callback(evt.target.error, result, not_found);
 						}
-						cursor.continue();
+					};
+
+					store = transaction.objectStore(store_name);
+					if ( index_name ) {
+						store = store.index(index_name);
 					}
-				};
 
-			} catch ( err ) {
-				if ( transaction ) {
-					transaction.oncomplete = null;
-					transaction.abort();
+					if ( action === 'get' ) {
+						not_found = [];
+						item_list.forEach(function(id) {
+							store.get(id).onsuccess = function(evt) {
+								if ( evt.target.result ) {
+									result.push(evt.target.result);
+								} else {
+									not_found.push(id);
+								}
+							};
+						});
+					} else if ( action === 'delete' ) {
+						result = undefined;
+						item_list.forEach(function(id) {
+							store.delete(id);
+						});
+					} else if ( action === 'add' ) {
+						item_list.forEach(function(item) {
+							store.add(item).onsuccess = function(evt) {
+								store.get(evt.target.result).onsuccess = function(evt) {
+									result.push(evt.target.result);
+								};
+							};
+						});
+					} else if ( action === 'put' ) {
+						item_list.forEach(function(item) {
+							store.put(item).onsuccess = function(evt) {
+								store.get(evt.target.result).onsuccess = function(evt) {
+									result.push(evt.target.result);
+								};
+							};
+						});
+					} else if ( action === 'cursor' ) {
+						if ( range_data ) {
+							range_object = window.IDBKeyRange[range_data.shift()].apply(window, range_data);
+						}
+
+						store.openCursor(range_object || undefined, cursor_name || 'next').addEventListener('success',function(evt) {
+							if ( evt.target.result ) {
+								if ( cursor_fn === undefined ) {
+									result.push(evt.target.result.value);
+									evt.target.result.continue();
+								} else {
+									var cursor_result = cursor_fn(evt.target.result.value);
+
+									if ( cursor_result !== false ) {
+										if ( cursor_result !== null && cursor_result !== undefined ) {
+											result.push(cursor_result);
+										}
+										evt.target.result.continue();
+									}
+								}
+							}
+						});
+					}
+				} catch ( err ) {
+					if ( transaction ) {
+						transaction.oncomplete = null;
+						transaction.abort();
+					}
+					if ( Object.prototype.toString.call(callback) === '[object Function]' ) {
+						setTimeout(function() {callback(err);});
+					}
 				}
-				cb(parseError(err));
 			}
+
+			function get(items) {
+				access_name = 'readonly';
+				action = 'get';
+				sorted_items = items.sort();
+				item_list = items;
+				return return_object;
+			}
+
+			function put(items) {
+				access_name = 'readwrite';
+				action = 'put';
+				item_list = items;
+				return return_object;
+			}
+
+			function add(items) {
+				access_name = 'readwrite';
+				action = 'add';
+				item_list = items;
+				return return_object;
+			}
+
+			function del(items) {
+				access_name = 'readwrite';
+				action = 'delete';
+				item_list = items;
+				return return_object;
+			}
+
+			function cursor(name, fn) {
+				if ( Object.prototype.toString.call(name) === '[object Function]' ) {
+					fn = name;
+					name = undefined;
+				}
+				access_name = 'readonly';
+				cursor_fn = fn;
+				cursor_name = name;
+				action = 'cursor';
+				return return_object;
+			}
+
+			function index(name) {
+				index_name = name;
+				return return_object;
+			}
+
+			function range(type, lower, upper) {
+				range_data = [type, lower, upper];
+				return return_object;
+			}
+
+			function run(fn) {
+				runQuery(fn);
+			}
+
+			return_object = {
+				get: get,
+				put: put,
+				add: add,
+				delete: del,
+				cursor: cursor,
+				index: index,
+				range: range,
+				run: run
+			};
+			return return_object;
 		}
 
-		function loadDatabase(cb) {
+		function loadStorage(cb) {
 			try {
 				db = window.indexedDB.open(config.name, config.version);
 
 				db.onsuccess = function(evt) {
 					db_instance = evt.target.result;
-					initcb(null, {
-						get: getItems,
-						set: setItems,
-						del: deleteItems,
-						query: queryDatabase,
-						deleteDatabase: deleteDatabase,
-						resetDatabase: resetDatabase
+					cb(null, {
+						deleteStorage: deleteStorage,
+						store: loadStore
 					});
 				};
 				db.onerror = function(evt) {
-					initcb(parseError(evt));
+					cb(evt.target.error);
 				};
 				db.onupgradeneeded = createStorage;
 			} catch ( err ) {
-				cb(parseError(err));
+				setTimeout(function() {cb(err);});
 			}
 		}
 
-		function deleteDatabase() {
+		function deleteStorage() {
 			try {
 				window.indexedDB.deleteDatabase(config.name);
 				return true;
@@ -187,21 +218,10 @@
 			}
 		}
 
-		function resetDatabase(cb) {
-			var deleted = deleteDatabase();
-			if ( deleted === true ) {
-				loadDatabase(function(err) {
-					cb(err);
-				});
-			} else {
-				cb(deleted);
-			}
-		}
-
 		try {
-			loadDatabase(initcb);
+			loadStorage(initcb);
 		} catch ( err ) {
-			initcb(parseError(err));
+			setTimeout(function() {initcb(err);});
 		}
 	};
 }(window, window.document, void(0)));
