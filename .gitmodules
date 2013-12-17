@@ -1,0 +1,20 @@
+[submodule "lib/IndexedDBShim"]
+	path = lib/IndexedDBShim
+	url = https://github.com/axemclion/IndexedDBShim.git
+	branch = master
+[submodule "lib/bluebird"]
+	path = lib/bluebird
+	url = https://github.com/petkaantonov/bluebird.git
+	branch = master
+[submodule "lib/lunr.js"]
+	path = lib/lunr.js
+	url = https://github.com/olivernn/lunr.js.git
+	branch = master
+[submodule "lib/hammer.js"]
+	path = lib/hammer.js
+	url = https://github.com/EightMedia/hammer.js.git
+	branch = master
+[submodule "lib/traceur-compiler"]
+	path = lib/traceur-compiler
+	url = https://code.google.com/p/traceur-compiler/
+	branch = master
