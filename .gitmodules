@@ -1,11 +1,3 @@
-[submodule "lib/IndexedDBShim"]
-	path = lib/IndexedDBShim
-	url = https://github.com/axemclion/IndexedDBShim.git
-	branch = master
-[submodule "lib/bluebird"]
-	path = lib/bluebird
-	url = https://github.com/petkaantonov/bluebird.git
-	branch = master
 [submodule "lib/lunr.js"]
 	path = lib/lunr.js
 	url = https://github.com/olivernn/lunr.js.git
@@ -14,7 +6,19 @@
 	path = lib/hammer.js
 	url = https://github.com/EightMedia/hammer.js.git
 	branch = master
-[submodule "lib/traceur-compiler"]
-	path = lib/traceur-compiler
-	url = https://code.google.com/p/traceur-compiler/
+[submodule "sys/systemjs"]
+	path = sys/systemjs
+	url = https://github.com/systemjs/systemjs.git
+	branch = master
+[submodule "sys/es6-module-loader"]
+	path = sys/es6-module-loader
+	url = https://github.com/ModuleLoader/es6-module-loader.git
+	branch = master
+[submodule "sys/traceur-compiler"]
+	path = sys/traceur-compiler
+	url = https://github.com/google/traceur-compiler.git
+	branch = master
+[submodule "sys/IndexedDBShim"]
+	path = sys/IndexedDBShim
+	url = https://github.com/axemclion/IndexedDBShim.git
 	branch = master
