@@ -2,15 +2,16 @@
 
 function DBInstance(db) {
 	this.db = db;
-	this.transaction = null;
 	this.store_name = null;
 	this.index_name = null;
 }
 
 DBInstance.prototype.__update_store = function(type, data) {
+	var store_name = this.store_name, index_name = this.index_name;
+
 	return new Promise(function(resolve, reject) {
-		var store_name = this.store_name,
-			index_name = this.index_name,
+		var multiple_inserts = Array.isArray(data),
+			result = [],
 			trans = this.db.transaction(store_name, 'readwrite'),
 			store = trans.objectStore(store_name);
 
@@ -18,17 +19,25 @@ DBInstance.prototype.__update_store = function(type, data) {
 			store = store.index(index_name);
 		}
 
-		trans.addEventListener('complete', resolve);
+		trans.addEventListener('complete', function() {
+			if ( multiple_inserts ) {
+				resolve(result);
+			} else {
+				resolve(result.pop());
+			}
+		});
+
 		trans.addEventListener('error', function(evt) {
 			reject(evt.target.error);
 		});
 
-		if ( !Array.isArray(data) ) {
+		if ( !multiple_inserts ) {
 			data = [data];
 		}
 
 		data.forEach(function(item) {
 			store[type](item);
+			result.push(item);
 		});
 	}.bind(this));
 };
@@ -45,10 +54,10 @@ DBInstance.prototype.index = function(name) {
 };
 
 DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
+	var store_name = this.store_name, index_name = this.index_name;
+
 	return new Promise(function(resolve, reject) {
-		var store_name = this.store_name,
-			index_name = this.index_name,
-			trans = this.db.transaction(store_name, 'readwrite'),
+		var trans = this.db.transaction(store_name, 'readwrite'),
 			store = trans.objectStore(store_name),
 			range, result = [];
 
