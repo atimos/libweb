@@ -14,10 +14,6 @@
 	path = sys/es6-module-loader
 	url = https://github.com/ModuleLoader/es6-module-loader.git
 	branch = master
-[submodule "sys/traceur-compiler"]
-	path = sys/traceur-compiler
-	url = https://github.com/google/traceur-compiler.git
-	branch = master
 [submodule "sys/IndexedDBShim"]
 	path = sys/IndexedDBShim
 	url = https://github.com/axemclion/IndexedDBShim.git

@@ -170,7 +170,7 @@ export function create(name, config) {
 
 				if ( store.index ) {
 					store.index.forEach(function(index) {
-						object_store.createIndex(index.name, {unique: index.unique});
+						object_store.createIndex(index.name, index.name, {unique: index.unique});
 					});
 				}
 			});
