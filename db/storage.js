@@ -36,8 +36,14 @@ DBInstance.prototype.__update_store = function(type, data) {
 		}
 
 		data.forEach(function(item) {
-			store[type](item);
-			result.push(item);
+			store[type](item).addEventListener('success', function(evt) {
+				if ( evt.target.source.keyPath ) {
+					item[evt.target.source.keyPath] = evt.target.result;
+				} else {
+					item.__key = evt.target.result;
+				}
+				result.push(item);
+			});
 		});
 	}.bind(this));
 };
