@@ -13,10 +13,10 @@ DBInstance.prototype.__update_store = function(type, data) {
 		var multiple_inserts = Array.isArray(data),
 			result = [],
 			trans = this.db.transaction(store_name, 'readwrite'),
-			store = trans.objectStore(store_name);
+			store = trans.objectStore(store_name), index;
 
 		if ( index_name ) {
-			store = store.index(index_name);
+			index = store.index(index_name);
 		}
 
 		trans.addEventListener('complete', function() {
@@ -36,7 +36,7 @@ DBInstance.prototype.__update_store = function(type, data) {
 		}
 
 		data.forEach(function(item) {
-			store[type](item).addEventListener('success', function(evt) {
+			(index || store)[type](item).addEventListener('success', function(evt) {
 				if ( evt.target.source.keyPath ) {
 					item[evt.target.source.keyPath] = evt.target.result;
 				} else {
@@ -65,10 +65,10 @@ DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
 	return new Promise(function(resolve, reject) {
 		var trans = this.db.transaction(store_name, 'readwrite'),
 			store = trans.objectStore(store_name),
-			range, result = [];
+			range, result = [], index;
 
 		if ( index_name ) {
-			store = store.index(index_name);
+			index = store.index(index_name);
 		}
 
 		trans.addEventListener('complete', function() {
@@ -94,26 +94,30 @@ DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
 				iterator = value2;
 			break;
 			case 'lower':
-				range = window.IDBKeyRange.lowerBound(value1, options.include_lower || true);
+				range = window.IDBKeyRange.lowerBound(value1, options.exclude_lower || false);
 				iterator = value2;
 			break;
 			case 'upper':
-				range = window.IDBKeyRange.upperBound(value1, options.include_upper || true);
+				range = window.IDBKeyRange.upperBound(value1, options.exclude_upper || false);
 				iterator = value2;
 			break;
 			case 'lowerupper':
-				range = window.IDBKeyRange.bound(value1, value2, options.include_lower || true, options.include_upper || true);
+				range = window.IDBKeyRange.bound(value1, value2, options.exclude_lower || false, options.exclude_upper || false);
 				iterator = iterator;
 			break;
-			default:
+			case undefined:
+			case null:
 				iterator = value1;
+			break;
+			default:
+				return reject(new Error('Wrong range type'));
 		}
 
 		if ( Object.prototype.toString.call(iterator) !== '[object Function]' ) {
 			iterator = false;
 		}
 
-		store.openCursor(range, options.direction || 'next').addEventListener('success', function(evt) {
+		(index || store).openCursor(range, options.direction || 'next').addEventListener('success', function(evt) {
 			var iterator_result, cursor = evt.target.result;
 			if ( cursor === undefined || cursor === null ) {
 				return cursor;
@@ -212,7 +216,7 @@ function load(name) {
 	});
 }
 
-function deleteDatabase(name) {
+function clear_database(name) {
 	return new Promise(function(resolve, reject) {
 		var request = window.indexedDB.deleteDatabase(name);
 
@@ -227,5 +231,5 @@ function deleteDatabase(name) {
 export var storage = {
 	load: load,
 	create: create,
-	delete: deleteDatabase
+	clear: clear_database
 };
