@@ -138,6 +138,8 @@ DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
 DBInstance.prototype.get = function(id) {
 	if ( !Array.isArray(id) ) {
 		return this.iterate({range: 'only'}, id);
+	} else if ( id.length < 2 ) {
+		return this.iterate({range: 'only'}, id[0]);
 	} else {
 		id.sort();
 		return this.iterate({range: 'lower_upper'}, id[0], id[id.length - 1]);
