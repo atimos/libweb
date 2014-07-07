@@ -16,7 +16,9 @@ export var events = {
 				if ( !Array.isArray(events[name]) ) {
 					events[name] = [];
 				}
-				events[name].push(fn);
+				if ( Object.prototype.toString.call(fn) === '[object Function]' ) {
+					events[name].push(fn);
+				}
 			}
 		};
 	}
