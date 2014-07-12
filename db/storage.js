@@ -73,9 +73,14 @@ DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
 
 		trans.addEventListener('complete', function() {
 			if ( options.range === 'only' ) {
-				result = result[0] || null;
+				if ( result.length === 0 ) {
+					resolve(null);
+				} else {
+					resolve(result.shift());
+				}
+			} else {
+				resolve(result);
 			}
-			resolve(result);
 		});
 
 		trans.addEventListener('error', function(evt) {
@@ -119,6 +124,7 @@ DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
 
 		(index || store).openCursor(range, options.direction || 'next').addEventListener('success', function(evt) {
 			var iterator_result, cursor = evt.target.result;
+
 			if ( cursor === undefined || cursor === null ) {
 				return cursor;
 			}
@@ -127,8 +133,12 @@ DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
 				if ( cursor.source.keyPath === null ) {
 					cursor.value.__key = cursor.key;
 				}
+
 				result.push(cursor.value);
-				cursor.continue();
+
+				if ( options.range !== 'only' ) {
+					cursor.continue();
+				}
 			} else {
 				iterator_result = iterator(cursor.value, cursor.key, result);
 				if ( iterator_result !== true ) {
@@ -139,14 +149,16 @@ DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
 	}.bind(this));
 };
 
-DBInstance.prototype.get = function(id) {
+DBInstance.prototype.get = function(id, direction) {
+	direction = direction || 'next';
+
 	if ( !Array.isArray(id) ) {
-		return this.iterate({range: 'only'}, id);
+		return this.iterate({range: 'only', direction: direction}, id);
 	} else if ( id.length < 2 ) {
-		return this.iterate({range: 'only'}, id[0]);
+		return this.iterate({range: 'only', direction: direction}, id[0]);
 	} else {
 		id.sort();
-		return this.iterate({range: 'lower_upper'}, id[0], id[id.length - 1]);
+		return this.iterate({range: 'lowerupper', direction: direction}, id[0], id[id.length - 1]);
 	}
 };
 
@@ -182,7 +194,7 @@ export function create(name, config) {
 
 				if ( store.index ) {
 					store.index.forEach(function(index) {
-						object_store.createIndex(index.name, index.name, {unique: index.unique});
+						object_store.createIndex(index.name, index.keyPath || index.name, {unique: index.unique});
 					});
 				}
 			});
