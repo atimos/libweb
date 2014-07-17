@@ -123,11 +123,12 @@ DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
 		}
 
 		(index || store).openCursor(range, options.direction || 'next').addEventListener('success', function(evt) {
-			var iterator_result, cursor = evt.target.result;
+			var iterator_result, key_name, cursor = evt.target.result;
 
 			if ( cursor === undefined || cursor === null ) {
 				return cursor;
 			}
+
 
 			if ( iterator === false ) {
 				if ( cursor.source.keyPath === null ) {
@@ -140,7 +141,12 @@ DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
 					cursor.continue();
 				}
 			} else {
-				iterator_result = iterator(cursor.value, cursor.key, result);
+				key_name = cursor.source.keyPath;
+				if ( key_name === null ) {
+					key_name = '__key';
+				}
+
+				iterator_result = iterator(cursor.value, cursor.key, result, key_name);
 				if ( iterator_result !== true ) {
 					cursor.continue();
 				}
@@ -158,7 +164,20 @@ DBInstance.prototype.get = function(id, direction) {
 		return this.iterate({range: 'only', direction: direction}, id[0]);
 	} else {
 		id.sort();
-		return this.iterate({range: 'lowerupper', direction: direction}, id[0], id[id.length - 1]);
+		var id_list = id;
+
+		if ( direction === 'prev' ) {
+			id_list.revese();
+		}
+		return this.iterate({range: 'lowerupper', direction: direction}, id[0], id[id.length - 1], function(item, id, result, key_name) {
+			if ( id === id_list[0] ) {
+				id_list.shift();
+				if ( item[key_name] === undefined ) {
+					item[key_name] = id;
+				}
+				result.push(item);
+			}
+		});
 	}
 };
 
