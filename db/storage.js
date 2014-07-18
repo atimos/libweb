@@ -212,33 +212,32 @@ DbInstance.prototype.iterate = function(iteratee) {
 	});
 };
 
-DbInstance.prototype.get = function(id) {
-	var direction = this.direction_name || 'next';
+DbInstance.prototype.get = function(id_list) {
+	var id = null, direction = this.direction_name || 'next';
 
-	if ( !Array.isArray(id) ) {
-		return this.only(id).direction(direction).iterate();
+	if ( !Array.isArray(id_list) ) {
+		return this.only(id_list).direction(direction).iterate();
 	} else if ( id.length < 2 ) {
-		return this.only(id[0]).direction(direction).iterate();
+		return this.only(id_list[0]).direction(direction).iterate();
 	} else {
-		id.sort();
-		var id_list = id;
+		id_list.sort();
 
-		if ( this.direction === 'prev' ) {
-			id_list.revese();
+		if ( direction === 'prev' || direction === 'prevunique' ) {
+			id_list.reverse();
 		}
-		return this.lowerupper(id[0], id[id.length - 1]).iterate(function(cursor, result) {
-			var item;
 
-			if ( cursor.key === id_list[0] ) {
-				id_list.shift();
-				item = cursor.value;
-
+		return this.lowerupper(id_list[0], id_list[id_list.length - 1]).iterate(function(cursor, result) {
+			if ( id === cursor.key ) {
 				if ( cursor.source.keyPath === null ) {
-					item.__key = cursor.key;
+					cursor.value.__key = cursor.key;
 				}
-
-				result.push(item);
+				result.push(cursor.value);
 				cursor.continue();
+			} else {
+				if ( id_list.length > 0 ) {
+					id = id_list.shift();
+					cursor.continue(id);
+				}
 			}
 		});
 	}
