@@ -14,7 +14,3 @@
 	path = sys/es6-module-loader
 	url = https://github.com/ModuleLoader/es6-module-loader.git
 	branch = master
-[submodule "sys/IndexedDBShim"]
-	path = sys/IndexedDBShim
-	url = https://github.com/axemclion/IndexedDBShim.git
-	branch = master
