@@ -201,7 +201,7 @@ DbInstance.prototype.iterate = function(iteratee) {
 
 					result.push(cursor.value);
 
-					if ( range !== null && range.only === true ) {
+					if ( range === null || range.only !== true ) {
 						cursor.continue();
 					}
 				} else {
