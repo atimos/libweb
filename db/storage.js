@@ -246,7 +246,7 @@ export function storage(config) {
 		range: { writable: true, value: null },
 		direction_name: { writable: true, value: null },
 		mode_name: { writable: true, value: null },
-		db: { writable: true, value: null },
+		db: { writable: true, value: null }
 	});
 }
 
