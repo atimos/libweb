@@ -213,16 +213,16 @@ DbInstance.prototype.iterate = function(iteratee) {
 };
 
 DbInstance.prototype.get = function(id_list) {
-	var id = null, direction = this.direction_name || 'next';
+	var id = null;
 
 	if ( !Array.isArray(id_list) ) {
-		return this.only(id_list).direction(direction).iterate();
+		return this.only(id_list).iterate();
 	} else if ( id.length < 2 ) {
-		return this.only(id_list[0]).direction(direction).iterate();
+		return this.only(id_list[0]).iterate();
 	} else {
 		id_list.sort();
 
-		if ( direction === 'prev' || direction === 'prevunique' ) {
+		if ( this.direction_name === 'prev' || this.direction_name === 'prevunique' ) {
 			id_list.reverse();
 		}
 
