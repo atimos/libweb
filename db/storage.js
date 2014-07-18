@@ -232,12 +232,10 @@ DbInstance.prototype.get = function(id_list) {
 					cursor.value.__key = cursor.key;
 				}
 				result.push(cursor.value);
-				cursor.continue();
-			} else {
-				if ( id_list.length > 0 ) {
-					id = id_list.shift();
-					cursor.continue(id);
-				}
+			}
+			if ( id_list.length > 0 ) {
+				id = id_list.shift();
+				cursor.continue(id);
 			}
 		});
 	}
