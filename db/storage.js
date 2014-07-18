@@ -7,7 +7,13 @@ function load_db_instance() {
 		} else if ( this.db_config === null ) {
 			reject(Error('Database configuration is missing'));
 		} else {
-			var config = this.db_config, request = window.indexedDB.open(config.name, config.version);
+			var config = this.db_config, request;
+
+			if ( config.version !== undefined ) {
+		   		request = window.indexedDB.open(config.name, config.version);
+			} else {
+		   		request = window.indexedDB.open(config.name);
+			}
 
 			request.addEventListener('upgradeneeded', function(evt) {
 				var db = evt.target.result;
