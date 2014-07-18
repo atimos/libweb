@@ -1,266 +1,248 @@
 'use strict';
 
-function DBInstance(db) {
-	this.db = db;
-	this.store_name = null;
-	this.index_name = null;
+function load_db_instance() {
+	return new Promise(function(resolve, reject) {
+		if ( this.db !== null ) {
+			resolve(this.db);
+		} else if ( this.db_config === null ) {
+			reject(Error('Database configuration is missing'));
+		} else {
+			var config = this.db_config, request = window.indexedDB.open(config.name, config.version);
+
+			request.addEventListener('upgradeneeded', function(evt) {
+				var db = evt.target.result;
+
+				config.stores.forEach(function(store) {
+					var object_store;
+					if(db.objectStoreNames.contains(store.name)) {
+						if ( store.options !== undefined ) {
+							db.deleteObjectStore(store.name);
+							object_store = db.createObjectStore(store.name, store.options);
+						}
+					} else {
+						object_store = db.createObjectStore(store.name, store.options);
+					}
+
+					if ( store.index ) {
+						store.index.forEach(function(index) {
+							object_store.createIndex(index.name, index.keyPath || index.name, {unique: index.unique});
+						});
+					}
+				});
+			});
+
+			request.addEventListener('success', function(evt) {
+				this.db = evt.target.result;
+				Object.freeze(this.db);
+				resolve(this.db);
+			}.bind(this));
+
+			request.addEventListener('error', function(evt) {
+				reject(evt.target.error);
+			});
+		}
+	}.bind(this));
 }
 
-DBInstance.prototype.__update_store = function(type, data) {
-	var store_name = this.store_name, index_name = this.index_name;
+function update_store(type, data) {
+	var store_name = this.store_name, index_name = this.index_name, mode = this.mode || 'readwrite';
+	this.range = null;
+	this.mode = null;
+	this.direction_name = null;
+	this.index_name = null;
 
-	return new Promise(function(resolve, reject) {
-		var multiple_inserts = Array.isArray(data),
-			result = [],
-			trans = this.db.transaction(store_name, 'readwrite'),
-			store = trans.objectStore(store_name), index;
+	return load_db_instance.call(this).then(function(db) {
+		return new Promise(function(resolve, reject) {
+			var multiple_inserts = Array.isArray(data),
+				result = [],
+				trans = db.transaction(store_name, mode),
+				store = trans.objectStore(store_name), index;
 
-		if ( index_name ) {
-			index = store.index(index_name);
-		}
-
-		trans.addEventListener('complete', function() {
-			if ( multiple_inserts ) {
-				resolve(result);
-			} else {
-				resolve(result.pop());
+			if ( index_name ) {
+				index = store.index(index_name);
 			}
-		});
 
-		trans.addEventListener('error', function(evt) {
-			reject(evt.target.error);
-		});
-
-		if ( !multiple_inserts ) {
-			data = [data];
-		}
-
-		data.forEach(function(item) {
-			(index || store)[type](item).addEventListener('success', function(evt) {
-				if ( evt.target.source.keyPath ) {
-					item[evt.target.source.keyPath] = evt.target.result;
+			trans.addEventListener('complete', function() {
+				if ( multiple_inserts ) {
+					resolve(result);
 				} else {
-					item.__key = evt.target.result;
+					resolve(result.pop());
 				}
-				result.push(item);
+			});
+
+			trans.addEventListener('error', function(evt) {
+				reject(evt.target.error);
+			});
+
+			if ( !multiple_inserts ) {
+				data = [data];
+			}
+
+			data.forEach(function(item) {
+				(index || store)[type](item).addEventListener('success', function(evt) {
+					if ( evt.target.source.keyPath ) {
+						item[evt.target.source.keyPath] = evt.target.result;
+					} else {
+						item.__key = evt.target.result;
+					}
+					result.push(item);
+				});
 			});
 		});
-	}.bind(this));
+	});
+}
+
+function DbInstance() {}
+
+DbInstance.prototype.store = function(store_name, mode) {
+	this.mode = mode || null;
+	this.store_name = store_name;
+	return this;
 };
 
-DBInstance.prototype.store = function(name) {
-	this.store_name = name;
+DbInstance.prototype.index = function(index_name) {
+	this.index_name = index_name;
+	return this;
+};
+
+DbInstance.prototype.only = function(value) {
+	this.range = window.IDBKeyRange.only(value);
+	this.range.only = true;
+	return this;
+};
+
+DbInstance.prototype.lower = function(lower_bound, exclude_lower) {
+	this.range = window.IDBKeyRange.lowerBound(lower_bound, exclude_lower || false);
+	return this;
+};
+
+DbInstance.prototype.upper = function(upper_bound, exclude_upper) {
+	this.range = window.IDBKeyRange.upperBound(upper_bound, exclude_upper || false);
+	return this;
+};
+
+DbInstance.prototype.lowerupper = function(lower_bound, upper_bound, exclude_lower, exclude_upper) {
+	this.range = window.IDBKeyRange.bound(lower_bound, upper_bound, exclude_lower || false, exclude_upper || false);
+	return this;
+};
+
+DbInstance.prototype.direction = function(direction) {
+	this.direction_name = direction;
+	return this;
+};
+
+DbInstance.prototype.add = function(data) {
+	return update_store.call(this, 'add', data);
+};
+
+DbInstance.prototype.put = function(data) {
+	return update_store.call(this, 'put', data);
+};
+
+DbInstance.prototype.del = function(data) {
+	return update_store.call(this, 'delete', data);
+};
+
+DbInstance.prototype.iterate = function(iteratee) {
+	var store_name = this.store_name, index_name = this.index_name, range = this.range, direction = this.direction_name, mode = this.mode || 'readonly';
+	this.range = null;
+	this.mode = null;
+	this.direction_name = null;
 	this.index_name = null;
-	return this;
-};
 
-DBInstance.prototype.index = function(name) {
-	this.index_name = name;
-	return this;
-};
+	return load_db_instance.call(this).then(function(db) {
+		return new Promise(function(resolve, reject) {
+			var trans = db.transaction(store_name, mode),
+				store = trans.objectStore(store_name),
+				result = [], index;
 
-DBInstance.prototype.iterate = function(options, value1, value2, iterator) {
-	var store_name = this.store_name, index_name = this.index_name;
+			if ( index_name ) {
+				index = store.index(index_name);
+			}
 
-	return new Promise(function(resolve, reject) {
-		var trans = this.db.transaction(store_name, 'readwrite'),
-			store = trans.objectStore(store_name),
-			range, result = [], index;
-
-		if ( index_name ) {
-			index = store.index(index_name);
-		}
-
-		trans.addEventListener('complete', function() {
-			if ( options.range === 'only' ) {
-				if ( result.length === 0 ) {
-					resolve(null);
+			trans.addEventListener('complete', function() {
+				if ( range !== null && range.only === true ) {
+					if ( result.length === 0 ) {
+						resolve(null);
+					} else {
+						resolve(result.shift());
+					}
 				} else {
-					resolve(result.shift());
+					resolve(result);
 				}
-			} else {
-				resolve(result);
-			}
+			});
+
+			trans.addEventListener('error', function(evt) {
+				reject(evt.target.error);
+			});
+
+			(index || store).openCursor(range, direction || 'next').addEventListener('success', function(evt) {
+				var iteratee_result, key_name, cursor = evt.target.result;
+
+				if ( cursor === undefined || cursor === null ) {
+					return cursor;
+				}
+
+
+				if ( iteratee === undefined ) {
+					if ( cursor.source.keyPath === null ) {
+						cursor.value.__key = cursor.key;
+					}
+
+					result.push(cursor.value);
+
+					if ( range !== null && range.only === true ) {
+						cursor.continue();
+					}
+				} else {
+					iteratee_result = iteratee(cursor, result, key_name);
+				}
+			});
 		});
-
-		trans.addEventListener('error', function(evt) {
-			reject(evt.target.error);
-		});
-
-		if ( Object.prototype.toString.call(options) === '[object Function]' ) {
-			value1 = options;
-			options = {};
-		}
-
-		options = options || {};
-		switch ( options.range ) {
-			case 'only':
-				range = window.IDBKeyRange.only(value1);
-				iterator = value2;
-			break;
-			case 'lower':
-				range = window.IDBKeyRange.lowerBound(value1, options.exclude_lower || false);
-				iterator = value2;
-			break;
-			case 'upper':
-				range = window.IDBKeyRange.upperBound(value1, options.exclude_upper || false);
-				iterator = value2;
-			break;
-			case 'lowerupper':
-				range = window.IDBKeyRange.bound(value1, value2, options.exclude_lower || false, options.exclude_upper || false);
-				iterator = iterator;
-			break;
-			case undefined:
-			case null:
-				iterator = value1;
-			break;
-			default:
-				return reject(new Error('Wrong range type'));
-		}
-
-		if ( Object.prototype.toString.call(iterator) !== '[object Function]' ) {
-			iterator = false;
-		}
-
-		(index || store).openCursor(range, options.direction || 'next').addEventListener('success', function(evt) {
-			var iterator_result, key_name, cursor = evt.target.result;
-
-			if ( cursor === undefined || cursor === null ) {
-				return cursor;
-			}
-
-
-			if ( iterator === false ) {
-				if ( cursor.source.keyPath === null ) {
-					cursor.value.__key = cursor.key;
-				}
-
-				result.push(cursor.value);
-
-				if ( options.range !== 'only' ) {
-					cursor.continue();
-				}
-			} else {
-				key_name = cursor.source.keyPath;
-				if ( key_name === null ) {
-					key_name = '__key';
-				}
-
-				iterator_result = iterator(cursor.value, cursor.key, result, key_name);
-				if ( iterator_result !== true ) {
-					cursor.continue();
-				}
-			}
-		});
-	}.bind(this));
+	});
 };
 
-DBInstance.prototype.get = function(id, direction) {
-	direction = direction || 'next';
+DbInstance.prototype.get = function(id) {
+	var direction = this.direction_name || 'next';
 
 	if ( !Array.isArray(id) ) {
-		return this.iterate({range: 'only', direction: direction}, id);
+		return this.only(id).direction(direction).iterate();
 	} else if ( id.length < 2 ) {
-		return this.iterate({range: 'only', direction: direction}, id[0]);
+		return this.only(id[0]).direction(direction).iterate();
 	} else {
 		id.sort();
 		var id_list = id;
 
-		if ( direction === 'prev' ) {
+		if ( this.direction === 'prev' ) {
 			id_list.revese();
 		}
-		return this.iterate({range: 'lowerupper', direction: direction}, id[0], id[id.length - 1], function(item, id, result, key_name) {
-			if ( id === id_list[0] ) {
+		return this.lowerupper(id[0], id[id.length - 1]).iterate(function(cursor, result) {
+			var item;
+
+			if ( cursor.key === id_list[0] ) {
 				id_list.shift();
-				if ( item[key_name] === undefined ) {
-					item[key_name] = id;
+				item = cursor.value;
+
+				if ( cursor.source.keyPath === null ) {
+					item.__key = cursor.key;
 				}
+
 				result.push(item);
+				cursor.continue();
 			}
 		});
 	}
 };
 
-DBInstance.prototype.add = function(data) {
-	return this.__update_store('add', data);
-};
-
-DBInstance.prototype.put = function(data) {
-	return this.__update_store('put', data);
-};
-
-DBInstance.prototype.delete = function(data) {
-	return this.__update_store('delete', data);
-};
-
-export function create(name, config) {
-	return new Promise(function(resolve, reject) {
-		var request = window.indexedDB.open(name, config.version);
-
-		request.addEventListener('upgradeneeded', function(evt) {
-			var db = evt.target.result;
-
-			config.stores.forEach(function(store) {
-				var object_store;
-				if(db.objectStoreNames.contains(store.name)) {
-					if ( store.options !== undefined ) {
-						db.deleteObjectStore(store.name);
-						object_store = db.createObjectStore(store.name, store.options);
-					}
-				} else {
-					object_store = db.createObjectStore(store.name, store.options);
-				}
-
-				if ( store.index ) {
-					store.index.forEach(function(index) {
-						object_store.createIndex(index.name, index.keyPath || index.name, {unique: index.unique});
-					});
-				}
-			});
-		});
-
-		request.addEventListener('success', function(evt) {
-			resolve(new DBInstance(evt.target.result));
-		});
-
-		request.addEventListener('error', function(evt) {
-			reject(evt.target.error);
-		});
+export function storage(config) {
+	return Object.create(DbInstance.prototype, {
+		db_config: { value: config },
+		store_name: { writable: true, value: null },
+		index_name: { writable: true, value: null },
+		range: { writable: true, value: null },
+		direction_name: { writable: true, value: null },
+		mode: { writable: true, value: null },
+		db: { writable: true, value: null },
 	});
 }
 
-function load(name) {
-	return new Promise(function(resolve, reject) {
-		var request = window.indexedDB.open(name);
-
-		request.addEventListener('success', function(evt) {
-			if ( evt.target.result.objectStoreNames.length === 0 ) {
-				reject(new Error('No store is found'));
-			} else {
-				resolve(new DBInstance(evt.target.result));
-			}
-		});
-
-		request.addEventListener('error', function(evt) {
-			reject(evt.target.error);
-		});
-	});
-}
-
-function clear_database(name) {
-	return new Promise(function(resolve, reject) {
-		var request = window.indexedDB.deleteDatabase(name);
-
-		request.addEventListener('success', resolve);
-
-		request.addEventListener('error', function(evt) {
-			reject(evt.target.error);
-		});
-	});
-}
-
-export var storage = {
-	load: load,
-	create: create,
-	clear: clear_database
-};
