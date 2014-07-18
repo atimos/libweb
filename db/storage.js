@@ -45,9 +45,9 @@ function load_db_instance() {
 }
 
 function update_store(type, data) {
-	var store_name = this.store_name, index_name = this.index_name, mode = this.mode || 'readwrite';
+	var store_name = this.store_name, index_name = this.index_name, mode_name = this.mode_name || 'readwrite';
 	this.range = null;
-	this.mode = null;
+	this.mode_name = null;
 	this.direction_name = null;
 	this.index_name = null;
 
@@ -55,7 +55,7 @@ function update_store(type, data) {
 		return new Promise(function(resolve, reject) {
 			var multiple_inserts = Array.isArray(data),
 				result = [],
-				trans = db.transaction(store_name, mode),
+				trans = db.transaction(store_name, mode_name),
 				store = trans.objectStore(store_name), index;
 
 			if ( index_name ) {
@@ -94,9 +94,13 @@ function update_store(type, data) {
 
 function DbInstance() {}
 
-DbInstance.prototype.store = function(store_name, mode) {
-	this.mode = mode || null;
+DbInstance.prototype.store = function(store_name) {
 	this.store_name = store_name;
+	return this;
+};
+
+DbInstance.prototype.mode = function(mode_name) {
+	this.mode_name = mode_name;
 	return this;
 };
 
@@ -144,15 +148,15 @@ DbInstance.prototype.del = function(data) {
 };
 
 DbInstance.prototype.iterate = function(iteratee) {
-	var store_name = this.store_name, index_name = this.index_name, range = this.range, direction = this.direction_name, mode = this.mode || 'readonly';
+	var store_name = this.store_name, index_name = this.index_name, range = this.range, direction_name = this.direction_name || 'next', mode_name = this.mode_name || 'readonly';
 	this.range = null;
-	this.mode = null;
+	this.mode_name = null;
 	this.direction_name = null;
 	this.index_name = null;
 
 	return load_db_instance.call(this).then(function(db) {
 		return new Promise(function(resolve, reject) {
-			var trans = db.transaction(store_name, mode),
+			var trans = db.transaction(store_name, mode_name),
 				store = trans.objectStore(store_name),
 				result = [], index;
 
@@ -176,7 +180,7 @@ DbInstance.prototype.iterate = function(iteratee) {
 				reject(evt.target.error);
 			});
 
-			(index || store).openCursor(range, direction || 'next').addEventListener('success', function(evt) {
+			(index || store).openCursor(range, direction_name).addEventListener('success', function(evt) {
 				var iteratee_result, key_name, cursor = evt.target.result;
 
 				if ( cursor === undefined || cursor === null ) {
@@ -241,7 +245,7 @@ export function storage(config) {
 		index_name: { writable: true, value: null },
 		range: { writable: true, value: null },
 		direction_name: { writable: true, value: null },
-		mode: { writable: true, value: null },
+		mode_name: { writable: true, value: null },
 		db: { writable: true, value: null },
 	});
 }
