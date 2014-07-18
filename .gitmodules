@@ -4,7 +4,7 @@
 	branch = master
 [submodule "lib/hammer.js"]
 	path = lib/hammer.js
-	url = https://github.com/EightMedia/hammer.js.git
+	url = https://github.com/hammerjs/hammer.js.git
 	branch = master
 [submodule "sys/systemjs"]
 	path = sys/systemjs
