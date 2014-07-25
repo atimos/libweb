@@ -1,232 +1,93 @@
 'use strict';
+export class Storage {
 
-function load_db_instance() {
-	return new Promise(function(resolve, reject) {
-		if ( this.db !== null ) {
-			resolve(this.db);
-		} else if ( this.db_config === null ) {
-			reject(Error('Database configuration is missing'));
+	constructor(config) {
+		this._config = config;
+		this._dbinstance = null;
+		this._range = null;
+		this._store = null;
+		this._index = null;
+		this._direction = null;
+		this._mode = null;
+	}
+
+	store(store_name) {
+		this._store = store_name;
+		return this;
+	}
+
+	mode(mode_name) {
+		this._mode = mode_name;
+		return this;
+	}
+
+	index(index_name) {
+		this._index = index_name;
+		return this;
+	}
+
+	direction(direction_name) {
+		this._direction = direction_name;
+		return this;
+	}
+
+	only(value) {
+		this._range = window.IDBKeyRange.only(value);
+		this._range.only = true;
+		return this;
+	}
+
+	lower(lower_bound, exclude_lower) {
+		this._range = window.IDBKeyRange.lowerBound(lower_bound, exclude_lower || false);
+		return this;
+	}
+
+	upper(upper_bound, exclude_upper) {
+		this._range = window.IDBKeyRange.upperBound(upper_bound, exclude_upper || false);
+		return this;
+	}
+
+	lowerupper(lower_bound, upper_bound, exclude_lower, exclude_upper) {
+		this._range = window.IDBKeyRange.bound(lower_bound, upper_bound, exclude_lower || false, exclude_upper || false);
+		return this;
+	}
+
+	add(data) {
+		return this._update_store('add', data);
+	}
+
+	put(data) {
+		return this._update_store('put', data);
+	}
+
+	delete(data) {
+		return this._update_store('delete', data);
+	}
+
+	get(id_list) {
+		let id, range_type, range;
+
+		if ( !Array.isArray(id_list) ) {
+			id_list = [id_list];
+			range_type = 'only';
 		} else {
-			var config = this.db_config, request;
-
-			if ( config.version !== undefined ) {
-		   		request = window.indexedDB.open(config.name, config.version);
-			} else {
-		   		request = window.indexedDB.open(config.name);
-			}
-
-			request.addEventListener('upgradeneeded', function(evt) {
-				var db = evt.target.result;
-
-				config.stores.forEach(function(store) {
-					var object_store;
-					if(db.objectStoreNames.contains(store.name)) {
-						if ( store.options !== undefined ) {
-							db.deleteObjectStore(store.name);
-							object_store = db.createObjectStore(store.name, store.options);
-						}
-					} else {
-						object_store = db.createObjectStore(store.name, store.options);
-					}
-
-					if ( store.index ) {
-						store.index.forEach(function(index) {
-							object_store.createIndex(index.name, index.keyPath || index.name, {unique: index.unique});
-						});
-					}
-				});
-			});
-
-			request.addEventListener('success', function(evt) {
-				this.db = evt.target.result;
-				Object.freeze(this.db);
-				resolve(this.db);
-			}.bind(this));
-
-			request.addEventListener('error', function(evt) {
-				reject(evt.target.error);
-			});
+			range_type = 'lowerupper';
 		}
-	}.bind(this));
-}
 
-function update_store(type, data) {
-	var store_name = this.store_name, index_name = this.index_name, mode_name = this.mode_name || 'readwrite';
-	this.range = null;
-	this.mode_name = null;
-	this.direction_name = null;
-	this.index_name = null;
+		if ( id_list.length === 0 ) {
+			return Promise.resolve([]);
+		}
 
-	return load_db_instance.call(this).then(function(db) {
-		return new Promise(function(resolve, reject) {
-			var multiple_inserts = Array.isArray(data),
-				result = [],
-				trans = db.transaction(store_name, mode_name),
-				store = trans.objectStore(store_name), index;
-
-			if ( index_name ) {
-				index = store.index(index_name);
-			}
-
-			trans.addEventListener('complete', function() {
-				if ( multiple_inserts ) {
-					resolve(result);
-				} else {
-					resolve(result.pop());
-				}
-			});
-
-			trans.addEventListener('error', function(evt) {
-				reject(evt.target.error);
-			});
-
-			if ( !multiple_inserts ) {
-				data = [data];
-			}
-
-			data.forEach(function(item) {
-				(index || store)[type](item).addEventListener('success', function(evt) {
-					if ( evt.target.source.keyPath ) {
-						item[evt.target.source.keyPath] = evt.target.result;
-					} else {
-						item.__key = evt.target.result;
-					}
-					result.push(item);
-				});
-			});
-		});
-	});
-}
-
-function DbInstance() {}
-
-DbInstance.prototype.store = function(store_name) {
-	this.store_name = store_name;
-	return this;
-};
-
-DbInstance.prototype.mode = function(mode_name) {
-	this.mode_name = mode_name;
-	return this;
-};
-
-DbInstance.prototype.index = function(index_name) {
-	this.index_name = index_name;
-	return this;
-};
-
-DbInstance.prototype.only = function(value) {
-	this.range = window.IDBKeyRange.only(value);
-	this.range.only = true;
-	return this;
-};
-
-DbInstance.prototype.lower = function(lower_bound, exclude_lower) {
-	this.range = window.IDBKeyRange.lowerBound(lower_bound, exclude_lower || false);
-	return this;
-};
-
-DbInstance.prototype.upper = function(upper_bound, exclude_upper) {
-	this.range = window.IDBKeyRange.upperBound(upper_bound, exclude_upper || false);
-	return this;
-};
-
-DbInstance.prototype.lowerupper = function(lower_bound, upper_bound, exclude_lower, exclude_upper) {
-	this.range = window.IDBKeyRange.bound(lower_bound, upper_bound, exclude_lower || false, exclude_upper || false);
-	return this;
-};
-
-DbInstance.prototype.direction = function(direction) {
-	this.direction_name = direction;
-	return this;
-};
-
-DbInstance.prototype.add = function(data) {
-	return update_store.call(this, 'add', data);
-};
-
-DbInstance.prototype.put = function(data) {
-	return update_store.call(this, 'put', data);
-};
-
-DbInstance.prototype.del = function(data) {
-	return update_store.call(this, 'delete', data);
-};
-
-DbInstance.prototype.iterate = function(iteratee) {
-	var store_name = this.store_name, index_name = this.index_name, range = this.range, direction_name = this.direction_name || 'next', mode_name = this.mode_name || 'readonly';
-	this.range = null;
-	this.mode_name = null;
-	this.direction_name = null;
-	this.index_name = null;
-
-	return load_db_instance.call(this).then(function(db) {
-		return new Promise(function(resolve, reject) {
-			var trans = db.transaction(store_name, mode_name),
-				store = trans.objectStore(store_name),
-				result = [], index;
-
-			if ( index_name ) {
-				index = store.index(index_name);
-			}
-
-			trans.addEventListener('complete', function() {
-				if ( range !== null && range.only === true ) {
-					if ( result.length === 0 ) {
-						resolve(null);
-					} else {
-						resolve(result.shift());
-					}
-				} else {
-					resolve(result);
-				}
-			});
-
-			trans.addEventListener('error', function(evt) {
-				reject(evt.target.error);
-			});
-
-			(index || store).openCursor(range, direction_name).addEventListener('success', function(evt) {
-				var iteratee_result, key_name, cursor = evt.target.result;
-
-				if ( cursor === undefined || cursor === null ) {
-					return cursor;
-				}
-
-
-				if ( iteratee === undefined ) {
-					if ( cursor.source.keyPath === null ) {
-						cursor.value.__key = cursor.key;
-					}
-
-					result.push(cursor.value);
-
-					if ( range === null || range.only !== true ) {
-						cursor.continue();
-					}
-				} else {
-					iteratee_result = iteratee(cursor, result, key_name);
-				}
-			});
-		});
-	});
-};
-
-DbInstance.prototype.get = function(id_list) {
-	var id = null;
-
-	if ( !Array.isArray(id_list) ) {
-		return this.only(id_list).iterate();
-	} else if ( id.length < 2 ) {
-		return this.only(id_list[0]).iterate();
-	} else {
 		id_list.sort();
 
-		if ( this.direction_name === 'prev' || this.direction_name === 'prevunique' ) {
+		if ( this._direction === 'prev' || this._direction === 'prevunique' ) {
 			id_list.reverse();
 		}
 
-		return this.lowerupper(id_list[0], id_list[id_list.length - 1]).iterate(function(cursor, result) {
+		range = this[range_type](id_list[0], id_list[id_list.length - 1]);
+
+		id = id_list.shift();
+		return range.iterate((cursor, result) => {
 			if ( id === cursor.key ) {
 				if ( cursor.source.keyPath === null ) {
 					cursor.value.__key = cursor.key;
@@ -239,17 +100,178 @@ DbInstance.prototype.get = function(id_list) {
 			}
 		});
 	}
-};
 
-export function storage(config) {
-	return Object.create(DbInstance.prototype, {
-		db_config: { value: config },
-		store_name: { writable: true, value: null },
-		index_name: { writable: true, value: null },
-		range: { writable: true, value: null },
-		direction_name: { writable: true, value: null },
-		mode_name: { writable: true, value: null },
-		db: { writable: true, value: null }
-	});
+	iterate(iteratee) {
+		return this._db().then(db => {
+			return new Promise((resolve, reject) => {
+				let trans = db.transaction(this._store, this._mode || 'readonly'),
+					store = trans.objectStore(this._store),
+					result = [],
+					cursor = null,
+					one_result = (this._range === null?false:this._range.only || false);
+
+				if ( this._index ) {
+					store = store.index(this._index);
+				}
+
+				trans.addEventListener('complete', () => {
+					if ( one_result === true ) {
+						if ( result.length === 0 ) {
+							resolve(null);
+						} else {
+							resolve(result.shift());
+						}
+					} else {
+						resolve(result);
+					}
+				});
+
+				trans.addEventListener('error', evt => {
+					evt.preventDefault();
+					trans.abort();
+					reject(evt.target.error);
+				});
+
+				cursor = store.openCursor(this._range, this._direction || 'next');
+
+				this._reset();
+
+				cursor.addEventListener('success', evt => {
+					let iteratee_result, key_name, cursor = evt.target.result;
+
+					if ( cursor === undefined || cursor === null ) {
+						return cursor;
+					}
+
+
+					if ( iteratee === undefined ) {
+						if ( cursor.source.keyPath === null ) {
+							cursor.value.__key = cursor.key;
+						}
+
+						result.push(cursor.value);
+
+						if ( one_result !== true ) {
+							cursor.continue();
+						}
+					} else {
+						iteratee_result = iteratee(cursor, result, key_name);
+					}
+				});
+			});
+		});
+	}
+
+	_update_store(type, data) {
+		return this._db().then(db => {
+			return new Promise((resolve, reject) => {
+				let multiple_inserts = Array.isArray(data),
+					result = [],
+					trans = db.transaction(this._store, this._mode || 'readwrite'),
+					store = trans.objectStore(this._store);
+
+				if ( !multiple_inserts ) {
+					data = [data];
+				}
+
+				if ( this._index ) {
+					store = store.index(this._index);
+				}
+
+				trans.addEventListener('complete',() => {
+					if ( multiple_inserts ) {
+						resolve(result);
+					} else {
+						resolve(result.pop());
+					}
+				});
+
+				trans.addEventListener('error', evt => {
+					evt.preventDefault();
+					trans.abort();
+					reject(evt.target.error);
+				});
+
+				this._reset();
+
+				data.forEach(item => {
+					let request = store[type](item);
+					request.addEventListener('success', evt => {
+						if ( evt.target.source.keyPath ) {
+							item[evt.target.source.keyPath] = evt.target.result;
+						} else {
+							item.__key = evt.target.result;
+						}
+						result.push(item);
+					});
+				});
+			});
+		});
+	}
+
+	_reset() {
+		this._index = null;
+		this._mode = null;
+		this._direction = null;
+		this._range = null;
+	}
+
+	_db() {
+		return new Promise((resolve, reject) => {
+			if ( this._dbinstance !== null ) {
+				resolve(this._dbinstance);
+			} else if ( this._config === null ) {
+				reject(Error('Database configuration is missing'));
+			} else {
+				let request;
+
+				if ( this._config.version !== undefined ) {
+					request = window.indexedDB.open(this._config.name, this._config.version);
+				} else {
+					request = window.indexedDB.open(this._config.name);
+				}
+
+				request.addEventListener('upgradeneeded', evt => {
+					let db = evt.target.result;
+
+					this._config.stores.forEach(store => {
+						let object_store;
+						if(db.objectStoreNames.contains(store.name)) {
+							if ( store.options !== undefined ) {
+								db.deleteObjectStore(store.name);
+								object_store = db.createObjectStore(store.name, store.options);
+							}
+						} else {
+							object_store = db.createObjectStore(store.name, store.options);
+						}
+
+						if ( store.index ) {
+							store.index.forEach(index => {
+								object_store.createIndex(index.name, index.keyPath || index.name, {unique: index.unique});
+							});
+						}
+					});
+				});
+
+				request.addEventListener('success', evt => {
+					this._dbinstance = evt.target.result;
+					resolve(this._dbinstance);
+				});
+
+				request.addEventListener('error', evt => {
+					evt.preventDefault();
+					request.abort();
+					reject(evt.target.error);
+				});
+			}
+		});
+	}
 }
 
+export function reset(db_name) {
+	return new Promise((resolve, reject) => {
+		let request = window.indexedDB.deleteDatabase(db_name);
+		request.addEventListener('success', resolve);
+		request.addEventListener('error', reject);
+	});
+}

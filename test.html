@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>  
+	<head> 
+		<meta charset="utf-8">
+		<title>Tracker Qunit test</title>
+		<link rel="stylesheet" href="//code.jquery.com/qunit/qunit-1.14.0.css">
+	</head>
+	<body>
+		<div id="qunit"></div>
+		<div id="qunit-fixture"></div>
+		<script src="//code.jquery.com/qunit/qunit-1.14.0.js"></script>
+		<script src="sys/traceur/traceur.js"></script>
+		<script>traceur.options.experimental = true; traceur.options.sourceMaps = true;new traceur.WebPageTranscoder(document.location.href).run();</script>
+		<script type="module" src="test/storage.js"></script>
+	</body>
+</html>

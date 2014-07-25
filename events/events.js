@@ -1,7 +1,6 @@
 'use strict';
 
-export var events = {
-	create:	function() {
+export function create() {
 		var events = {};
 
 		return {
@@ -22,4 +21,3 @@ export var events = {
 			}
 		};
 	}
-};
