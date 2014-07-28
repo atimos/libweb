@@ -32,23 +32,22 @@ export class Storage {
 	}
 
 	only(value) {
-		this._range = window.IDBKeyRange.only(value);
-		this._range.only = true;
+		this._range = { type: 'only', val1: value };
 		return this;
 	}
 
 	lower(lower_bound, exclude_lower) {
-		this._range = window.IDBKeyRange.lowerBound(lower_bound, exclude_lower || false);
+		this._range = { type: 'lowerBound', val1: lower_bound, exlude_lower: exclude_lower || false };
 		return this;
 	}
 
 	upper(upper_bound, exclude_upper) {
-		this._range = window.IDBKeyRange.upperBound(upper_bound, exclude_upper || false);
+		this._range = { type: 'upperBound', val1: upper_bound, exlude_upper: exclude_upper || false };
 		return this;
 	}
 
 	lowerupper(lower_bound, upper_bound, exclude_lower, exclude_upper) {
-		this._range = window.IDBKeyRange.bound(lower_bound, upper_bound, exclude_lower || false, exclude_upper || false);
+		this._range = { type: 'bound', val1: lower_bound, val2: upper_bound, exlude_lower: exclude_lower || false , exlude_upper: exclude_upper || false };
 		return this;
 	}
 
@@ -64,40 +63,26 @@ export class Storage {
 		return this._update_store('delete', data);
 	}
 
-	get(id_list) {
-		let id, range_type, range;
+	get(id) {
+		return this._db().then(db => {
+			return new Promise((resolve, reject) => {
+				let trans = db.transaction(this._store, this._mode || 'readonly'),
+				store = trans.objectStore(this._store);
 
-		if ( !Array.isArray(id_list) ) {
-			id_list = [id_list];
-			range_type = 'only';
-		} else {
-			range_type = 'lowerupper';
-		}
+				trans.addEventListener('error', evt => {
+					evt.preventDefault();
+					trans.abort();
+					reject(evt.target.error);
+				});
 
-		if ( id_list.length === 0 ) {
-			return Promise.resolve([]);
-		}
-
-		id_list.sort();
-
-		if ( this._direction === 'prev' || this._direction === 'prevunique' ) {
-			id_list.reverse();
-		}
-
-		range = this[range_type](id_list[0], id_list[id_list.length - 1]);
-
-		id = id_list.shift();
-		return range.iterate((cursor, result) => {
-			if ( id === cursor.key ) {
-				if ( cursor.source.keyPath === null ) {
-					cursor.value.__key = cursor.key;
-				}
-				result.push(cursor.value);
-			}
-			if ( id_list.length > 0 ) {
-				id = id_list.shift();
-				cursor.continue(id);
-			}
+				store.get(id).addEventListener('success', evt => {
+					if ( evt.target.result === undefined ) {
+						resolve(null);
+					} else {
+						resolve(evt.target.result);
+					}
+				});
+			});
 		});
 	}
 
@@ -107,23 +92,16 @@ export class Storage {
 				let trans = db.transaction(this._store, this._mode || 'readonly'),
 					store = trans.objectStore(this._store),
 					result = [],
-					cursor = null,
-					one_result = (this._range === null?false:this._range.only || false);
+					range = null,
+					direction = this._direction || 'next',
+					one_result = false;
 
 				if ( this._index ) {
 					store = store.index(this._index);
 				}
 
 				trans.addEventListener('complete', () => {
-					if ( one_result === true ) {
-						if ( result.length === 0 ) {
-							resolve(null);
-						} else {
-							resolve(result.shift());
-						}
-					} else {
-						resolve(result);
-					}
+					resolve(result);
 				});
 
 				trans.addEventListener('error', evt => {
@@ -132,12 +110,27 @@ export class Storage {
 					reject(evt.target.error);
 				});
 
-				cursor = store.openCursor(this._range, this._direction || 'next');
-
+				if ( this._range ) {
+					switch ( this._range.type ) {
+						case 'only':
+							range = window.IDBKeyRange[this._range.type](this._range.val1);
+							one_result = true;
+							break;
+						case 'lowerBound':
+							range = window.IDBKeyRange[this._range.type](this._range.val1, this._range.exclude_lower);
+							break;
+						case 'upperBound':
+							range = window.IDBKeyRange[this._range.type](this._range.val1, this._range.exclude_upper);
+							break;
+						case 'bound':
+							range = window.IDBKeyRange[this._range.type](this._range.val1, this._range.val2, this._range.exclude_lower, this._range.exclude_upper);
+							break;
+					}
+				}
 				this._reset();
 
-				cursor.addEventListener('success', evt => {
-					let iteratee_result, key_name, cursor = evt.target.result;
+				store.openCursor(range, direction).addEventListener('success', evt => {
+					let iteratee_result, cursor = evt.target.result;
 
 					if ( cursor === undefined || cursor === null ) {
 						return cursor;
@@ -145,17 +138,13 @@ export class Storage {
 
 
 					if ( iteratee === undefined ) {
-						if ( cursor.source.keyPath === null ) {
-							cursor.value.__key = cursor.key;
-						}
-
 						result.push(cursor.value);
 
 						if ( one_result !== true ) {
 							cursor.continue();
 						}
 					} else {
-						iteratee_result = iteratee(cursor, result, key_name);
+						iteratee_result = iteratee(cursor, result);
 					}
 				});
 			});
