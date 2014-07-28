@@ -6,11 +6,3 @@
 	path = lib/hammer.js
 	url = https://github.com/hammerjs/hammer.js.git
 	branch = master
-[submodule "sys/systemjs"]
-	path = sys/systemjs
-	url = https://github.com/systemjs/systemjs.git
-	branch = master
-[submodule "sys/es6-module-loader"]
-	path = sys/es6-module-loader
-	url = https://github.com/ModuleLoader/es6-module-loader.git
-	branch = master
