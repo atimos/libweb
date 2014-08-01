@@ -6,3 +6,7 @@
 	path = lib/hammer.js
 	url = https://github.com/hammerjs/hammer.js.git
 	branch = master
+[submodule "sys/traceur-compiler"]
+	path = sys/traceur-compiler
+	url = https://github.com/google/traceur-compiler.git
+	branch = master

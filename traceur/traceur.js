@@ -1,0 +1,1 @@
+../sys/traceur-compiler/bin/traceur.js
