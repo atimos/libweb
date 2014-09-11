@@ -4,10 +4,10 @@ root=`pwd`
 git submodule init
 git submodule upgrade --remote
 
-cd $root/sys/polymer/polymer
+cd $root/sys/polymer
 ./bin/pull-all.sh
 
-cd $root/sys/traceur/compiler
+cd $root/sys/traceur
 npm install
 make bin/traceur-runtime.js
 make bin/traceur.js

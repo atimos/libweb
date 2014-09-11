@@ -1,0 +1,1 @@
+./polymer/components/platform/platform.js
