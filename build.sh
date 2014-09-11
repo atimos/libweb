@@ -2,7 +2,7 @@
 root=`pwd`
 
 git submodule init
-git submodule upgrade --remote
+git submodule update --remote
 
 cd $root/sys/polymer
 ./bin/pull-all.sh
