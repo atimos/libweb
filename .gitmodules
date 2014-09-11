@@ -10,3 +10,7 @@
 	path = sys/traceur/compiler
 	url = https://github.com/google/traceur-compiler.git
 	branch = master
+[submodule "sys/polymer/polymer"]
+	path = sys/polymer/polymer
+	url = https://github.com/Polymer/tools.git
+	branch = master
