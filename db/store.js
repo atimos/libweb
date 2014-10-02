@@ -222,7 +222,8 @@ function update_store(type, data) {
 
 function cursor_entries(range, fn, direction = 'next') {
 	return new Promise((resolve, reject) => {
-		let result = new ResultMap(), cursor = null;
+		let result = new ResultMap(),
+			callback = (Object.prototype.toString.call(fn)==='[object Function]'?true:false);
 
 		this[_store].transaction.addEventListener('error', evt => {
 			evt.preventDefault();
@@ -234,29 +235,19 @@ function cursor_entries(range, fn, direction = 'next') {
 			resolve(result);
 		});
 
-		cursor = this[_store].openCursor(range, direction);
+		this[_store].openCursor(range, direction).addEventListener('success', evt => {
+			let cursor = evt.target.result;
 
-		if ( Object.prototype.toString.call(fn) === '[object Function]' ) {
-			cursor.addEventListener('success', evt => {
-				let cursor = evt.target.result;
-
-				if ( cursor === undefined || cursor === null ) {
-					return cursor;
-				} else {
+			if ( cursor === null ) {
+				return cursor;
+			} else {
+				if ( callback === true ) {
 					fn(cursor, result);
-				}
-			});
-		} else {
-			cursor.addEventListener('success', evt => {
-				let cursor = evt.target.result;
-
-				if ( cursor === undefined || cursor === null ) {
-					return cursor;
 				} else {
 					result.set(cursor.primaryKey, cursor.value);
 					cursor.continue();
 				}
-			});
-		}
+			}
+		});
 	});
 }
