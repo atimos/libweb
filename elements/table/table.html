@@ -1,0 +1,33 @@
+<sg-table>
+	<link rel="stylesheet" type="text/css" href="table.css" />
+	<menu>
+		<input type="text" name="search" />
+	</menu>
+	<table>
+		<thead><tr></tr></thead>
+		<tbody></tbody>
+		<tfoot><tr></tr><tr></tr><tr></tr></tfoot>
+	</table>
+	<nav>
+		<a href="#" data-action="first">First</a>
+		<a href="#" data-action="previous">Previous</a>
+		<span></span> - <span></span> / <span></span> // <span></span>
+		<a href="#" data-action="next">Next</a>
+		<a href="#" data-action="last">End</a>
+	</nav>
+
+	<template>
+		<th data-id="{id}" data-direction="asc"><a href="#">{name}</a></th>
+		<th data-id="{id}"><span>{name}</span></th>
+	</template>
+
+	<template>
+		<th data-value="{value}">{value}</th>
+	</template>
+
+	<template>
+		<th data-id="{id}" data-value="{value}">{value}</th>
+	</template>
+	<script defer="defer" src="./data.js"></script>
+	<script defer="defer" src="./table.js"></script>
+</sg-table>

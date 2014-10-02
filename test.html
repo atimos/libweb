@@ -3,14 +3,29 @@
 	<head> 
 		<meta charset="utf-8">
 		<title>Tracker Qunit test</title>
-		<link rel="stylesheet" href="//code.jquery.com/qunit/qunit-1.14.0.css">
+		<link rel="import" href="/elements/table/table.html">
+		<!-- <link rel="stylesheet" href="//code.jquery.com/qunit/qunit-1.14.0.css">-->
 	</head>
 	<body>
+		<sg-table></sg-table>
+	<!--
+		<script type="text/javascript">
+			var foo = document.querySelector('sg-table');
+			foo.setAttribute('headers', JSON.stringify([
+					{id: 'id', name: 'Id', sortable: true, description: 'Id'},
+					{id: 'name', name: 'Name', sortable: true, searchable: true, description: 'Name'},
+					{id: 'age', name: 'Age', sortable: true, searchable: true, description: 'Age'},
+					{id: 'sum', name: 'Sum', sortable: true, searchable: true, sum: true, description: 'Sum'},
+					{id: 'gender', name: 'Gender', sortable: false, searchable: true}
+			]));
+			console.log(foo.headers)
+		</script>
 		<div id="qunit"></div>
 		<div id="qunit-fixture"></div>
-		<script src="//code.jquery.com/qunit/qunit-1.14.0.js"></script>
+		-->
+		<!-- <script src="//code.jquery.com/qunit/qunit-1.14.0.js"></script>
 		<script src="sys/traceur/traceur.js"></script>
 		<script>traceur.options.experimental = true; traceur.options.sourceMaps = true;new traceur.WebPageTranscoder(document.location.href).run();</script>
-		<script type="module" src="test/storage.js"></script>
+		<script type="module" src="test/storage.js"></script> -->
 	</body>
 </html>
