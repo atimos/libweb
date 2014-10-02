@@ -1,25 +1,27 @@
-let map = window.Symbol('entries');
+'use strict';
+
+let _map = window.Symbol('map');
 
 export default class ResultMap {
 	constructor(...args) {
-		this[map] = new window.Map(...args);
+		this[_map] = new window.Map(...args);
 	}
 
-	get size() { return this[map].size; }
-	clear(...args) { return this[map].clear(...args); }
-	delete(...args) { return this[map].delete(...args); }
-	entries(...args) { return this[map].entries(...args); }
-	forEach(...args) { return this[map].forEach(...args); }
-	get(...args) { return this[map].get(...args); }
-	has(...args) { return this[map].has(...args); }
-	keys(...args) { return this[map].keys(...args); }
-	set(...args) { return this[map].set(...args); }
-	values(...args) { return this[map].values(...args); }
+	get size() { return this[_map].size; }
+	clear(...args) { return this[_map].clear(...args); }
+	delete(...args) { return this[_map].delete(...args); }
+	entries(...args) { return this[_map].entries(...args); }
+	forEach(...args) { return this[_map].forEach(...args); }
+	get(...args) { return this[_map].get(...args); }
+	has(...args) { return this[_map].has(...args); }
+	keys(...args) { return this[_map].keys(...args); }
+	set(...args) { return this[_map].set(...args); }
+	values(...args) { return this[_map].values(...args); }
 
 	map(cb) {
 		let result = new ResultMap();
 
-		this[map].forEach(function(...args) {
+		this[_map].forEach(function(...args) {
 			result.set(args[1], cb(...args));
 		});
 
@@ -27,7 +29,7 @@ export default class ResultMap {
 	}
 
 	reduce(cb, result) {
-		this[map].forEach(function(...args) {
+		this[_map].forEach(function(...args) {
 			result = cb(result, ...args);
 		});
 
@@ -37,12 +39,12 @@ export default class ResultMap {
 	reduceRight(cb, result) {
 		let keys = [];
 
-		for ( let key of this[map].keys() ) {
+		for ( let key of this[_map].keys() ) {
 			keys.unshift(key);
 		}
 
 		keys.forEach((key) => {
-			result = cb(result, this[map].get(key), key, this[map]);
+			result = cb(result, this[_map].get(key), key, this[_map]);
 		});
 
 		return result;
@@ -51,7 +53,7 @@ export default class ResultMap {
 	filter(cb) {
 		let result = new ResultMap();
 
-		this[map].forEach(function(...args) {
+		this[_map].forEach(function(...args) {
 			if (cb(...args)) {
 				result.set(args[1], args[0]);
 			}
@@ -61,8 +63,8 @@ export default class ResultMap {
 	}
 
 	some(cb) {
-		for ( let item of this[map].entries() ) {
-			if ( cb(item[1], item[0], this[map]) ) {
+		for ( let item of this[_map].entries() ) {
+			if ( cb(item[1], item[0], this[_map]) ) {
 				return true;
 			}
 		}
@@ -70,8 +72,8 @@ export default class ResultMap {
 	}
 
 	every(cb) {
-		for ( let item of this[map].entries() ) {
-			if ( !cb(item[1], item[0], this[map]) ) {
+		for ( let item of this[_map].entries() ) {
+			if ( !cb(item[1], item[0], this[_map]) ) {
 				return false;
 			}
 		}

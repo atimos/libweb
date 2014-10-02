@@ -1,5 +1,7 @@
 'use strict';
 
+let _store = window.Symbol('store');
+
 import ResultMap from '../common/resultmap';
 
 export default function store(config) {
@@ -78,40 +80,41 @@ export default function store(config) {
 
 class Store {
 	constructor(store) {
-		this.keyPath = store.keyPath;
-		this.store = store;
-		this.range = null;
+		this[_store] = store;
 	}
 
 	cursor(type, ...args) {
+		let range;
 		switch ( type ) {
 			case 'only':
-				this.range = window.IDBKeyRange.only(args.shift());
+				range = window.IDBKeyRange.only(args.shift());
 				break;
 			case 'lower':
-				this.range = window.IDBKeyRange.lowerBound(args.shift(), args.shift() || false);
+				range = window.IDBKeyRange.lowerBound(args.shift(), args.shift() || false);
 				break;
 			case 'upper':
-				this.range = window.IDBKeyRange.upperBound(args.shift(), args.shift() || false);
+				range = window.IDBKeyRange.upperBound(args.shift(), args.shift() || false);
 				break;
 			case 'lowerupper':
-				this.range = window.IDBKeyRange.bound(args.shift(), args.shift(), args.shift() || false, args.shift() || false);
+				range = window.IDBKeyRange.bound(args.shift(), args.shift(), args.shift() || false, args.shift() || false);
 				break;
 		}
 		return {
-			entries: cursor_entries.bind(this)
+			entries: (...args) => {
+				return cursor_entries.call(this, range, ...args);
+			}
 		};
 	}
 
 	get(id) {
 		return new Promise((resolve, reject) => {
-			this.store.transaction.addEventListener('error', evt => {
+			this[_store].transaction.addEventListener('error', evt => {
 				evt.preventDefault();
-				this.store.transaction.abort();
+				this[_store].transaction.abort();
 				reject(evt.target.error);
 			});
 
-			this.store.get(id).addEventListener('success', evt => {
+			this[_store].get(id).addEventListener('success', evt => {
 				resolve(evt.target.result);
 			});
 		});
@@ -198,18 +201,18 @@ function update_store(type, data) {
 	return new Promise((resolve, reject) => {
 		let result = new ResultMap();
 
-		this.store.transaction.addEventListener('error', evt => {
+		this[_store].transaction.addEventListener('error', evt => {
 			evt.preventDefault();
-			this.store.transaction.abort();
+			this[_store].transaction.abort();
 			reject(evt.target.error);
 		});
 
-		this.store.transaction.addEventListener('complete', () => {
+		this[_store].transaction.addEventListener('complete', () => {
 			resolve(result);
 		});
 
 		(Array.isArray(data)?data:[data]).forEach(item => {
-			let request = this.store[type](item);
+			let request = this[_store][type](item);
 			request.addEventListener('success', evt => {
 				result.set(evt.target.result, item);
 			});
@@ -217,21 +220,21 @@ function update_store(type, data) {
 	});
 }
 
-function cursor_entries(fn, direction = 'next') {
+function cursor_entries(range, fn, direction = 'next') {
 	return new Promise((resolve, reject) => {
 		let result = new ResultMap(), cursor = null;
 
-		this.store.transaction.addEventListener('error', evt => {
+		this[_store].transaction.addEventListener('error', evt => {
 			evt.preventDefault();
-			this.store.transaction.abort();
+			this[_store].transaction.abort();
 			reject(evt.target.error);
 		});
 
-		this.store.transaction.addEventListener('complete', () => {
+		this[_store].transaction.addEventListener('complete', () => {
 			resolve(result);
 		});
 
-		cursor = this.store.openCursor(this.range, direction);
+		cursor = this[_store].openCursor(range, direction);
 
 		if ( Object.prototype.toString.call(fn) === '[object Function]' ) {
 			cursor.addEventListener('success', evt => {
