@@ -6,20 +6,55 @@ import ResultMap from '../common/resultmap';
 
 export default function store(config) {
 	let db_instance = null;
-	let store_list = [];
 	return {
-		store: function(new_store_list) {
-			store_list = (Array.isArray(new_store_list)?new_store_list:[new_store_list]).map(store => {
-				if ( Object.prototype.toString.call(store) === '[object String]' ) {
-					return {name: store};
-				} else {
-					return store;
-				}
+		store: function(store_name) {
+			let store_list = [store_name].map(store => {
+				return {name: store};
 			});
-			return this;
+
+			return {
+				cursor: (...cursor_args) => {
+					return {
+						count: (...count_args) => {
+							return this.transaction(store_list, 'readonly').then((req) => {
+								return req[store_name].cursor(...cursor_args).count(...count_args);
+							});
+						},
+						entries: (...entries_args) => {
+							return this.transaction(store_list, 'readonly').then((req) => {
+								return req[store_name].cursor(...cursor_args).entries(...entries_args);
+							});
+						}
+					};
+				},
+
+				get: (...args) => {
+					return this.transaction(store_list, 'readonly').then((req) => {
+						return req[store_name].get(...args);
+					});
+				},
+
+				add: (...args) => {
+					return this.transaction(store_list, 'readwrite').then((req) => {
+						return req[store_name].add(...args);
+					});
+				},
+
+				put: (...args) => {
+					return this.transaction(store_list, 'readwrite').then((req) => {
+						return req[store_name].put(...args);
+					});
+				},
+
+				delete: (...args) => {
+					return this.transaction(store_list, 'readwrite').then((req) => {
+						return req[store_name].delete(...args);
+					});
+				},
+			};
 		},
 
-		transaction: function(mode) {
+		transaction: function(store_list, mode) {
 			if ( db_instance !== null ) {
 				return new Promise(resolve => {
 					resolve(create_transaction(db_instance, store_list, mode));
@@ -30,40 +65,6 @@ export default function store(config) {
 					return create_transaction(db_instance, store_list, mode);
 				});
 			}
-		},
-
-		cursor: function(...cursor_args) {
-			return {
-				entries: (...entries_args) => {
-					return this.transaction('readonly').then((req) => {
-						return req.entries().next().value[1].cursor(...cursor_args).entries(...entries_args);
-					});
-				}
-			};
-		},
-
-		get: function(...args) {
-			return this.transaction('readonly').then((req) => {
-				return req.entries().next().value[1].get(...args);
-			});
-		},
-
-		add: function(...args) {
-			return this.transaction('readwrite').then((req) => {
-				return req.entries().next().value[1].add(...args);
-			});
-		},
-
-		put: function(...args) {
-			return this.transaction('readwrite').then((req) => {
-				return req.entries().next().value[1].put(...args);
-			});
-		},
-
-		delete: function(...args) {
-			return this.transaction('readwrite').then((req) => {
-				return req.entries().next().value[1].delete(...args);
-			});
 		},
 
 		reset: function() {
@@ -102,6 +103,9 @@ class Store {
 		return {
 			entries: (...args) => {
 				return cursor_entries.call(this, range, ...args);
+			},
+			count: (...args) => {
+				return cursor_count.call(this, range, ...args);
 			}
 		};
 	}
@@ -177,24 +181,24 @@ function get_db_instance(config) {
 	});
 }
 
-function create_transaction(db, store_list, mode) {
-	let transaction, store_map = new Map();
+function create_transaction(db, store_list, mode = 'readonly') {
+	let transaction;
 
 	transaction = db.transaction(store_list.map(store => {
 		return store.name;
 	}), mode);
 
-	store_list.forEach(store_config => {
+	return store_list.reduce((store_list, store_config) => {
 		let store = transaction.objectStore(store_config.name);
 
 		if ( store_config.index ) {
 			store = store.index(store.index);
 		}
 
-		store_map.set(store.name, new Store(store));
-	});
+		store_list[store.name] = new Store(store);
 
-	return store_map;
+		return store_list;
+	}, {});
 }
 
 function update_store(type, data) {
@@ -248,6 +252,21 @@ function cursor_entries(range, fn, direction = 'next') {
 					cursor.continue();
 				}
 			}
+		});
+	});
+}
+
+function cursor_count(range) {
+	return new Promise((resolve, reject) => {
+
+		this[_store].transaction.addEventListener('error', evt => {
+			evt.preventDefault();
+			this[_store].transaction.abort();
+			reject(evt.target.error);
+		});
+
+		this[_store].count(range).addEventListener('success', function() {
+			resolve(this.result);
 		});
 	});
 }
