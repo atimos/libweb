@@ -242,13 +242,15 @@ function cursor_entries(range, fn, direction = 'next') {
 		this[_store].openCursor(range, direction).addEventListener('success', evt => {
 			let cursor = evt.target.result;
 
-			if ( cursor === null ) {
+			if ( cursor === null || cursor === undefined ) {
 				return cursor;
 			} else {
 				if ( callback === true ) {
 					fn(cursor, result);
 				} else {
-					result.set(cursor.primaryKey, cursor.value);
+					if ( cursor.primaryKey !== undefined ) {
+						result.set(cursor.primaryKey, cursor.value);
+					}
 					cursor.continue();
 				}
 			}
