@@ -1,27 +1,24 @@
 'use strict';
 
-let _store = window.Symbol('store');
+let _store = window.Symbol('store'), get_db_instance;
 
 import ResultMap from '../common/resultmap';
 
 export default function store(config) {
-	let db_instance = null;
 	return {
 		store: function(store_name) {
-			let store_list = [store_name].map(store => {
-				return {name: store};
-			});
+			let store_list = [{name: store_name}];
 
 			return {
 				cursor: (...cursor_args) => {
 					return {
 						count: (...count_args) => {
-							return this.transaction(store_list, 'readonly').then((req) => {
+							return this.transaction(store_list, 'readonly').then(req => {
 								return req[store_name].cursor(...cursor_args).count(...count_args);
 							});
 						},
 						entries: (...entries_args) => {
-							return this.transaction(store_list, 'readonly').then((req) => {
+							return this.transaction(store_list, 'readonly').then(req => {
 								return req[store_name].cursor(...cursor_args).entries(...entries_args);
 							});
 						}
@@ -29,48 +26,56 @@ export default function store(config) {
 				},
 
 				get: (...args) => {
-					return this.transaction(store_list, 'readonly').then((req) => {
+					return this.transaction(store_list, 'readonly').then(req => {
 						return req[store_name].get(...args);
 					});
 				},
 
 				add: (...args) => {
-					return this.transaction(store_list, 'readwrite').then((req) => {
+					return this.transaction(store_list, 'readwrite').then(req => {
 						return req[store_name].add(...args);
 					});
 				},
 
 				put: (...args) => {
-					return this.transaction(store_list, 'readwrite').then((req) => {
+					return this.transaction(store_list, 'readwrite').then(req => {
 						return req[store_name].put(...args);
 					});
 				},
 
 				delete: (...args) => {
-					return this.transaction(store_list, 'readwrite').then((req) => {
+					return this.transaction(store_list, 'readwrite').then(req => {
 						return req[store_name].delete(...args);
 					});
 				},
 			};
 		},
 
-		transaction: function(store_list, mode) {
-			if ( db_instance !== null ) {
-				return new Promise(resolve => {
-					resolve(create_transaction(db_instance, store_list, mode));
-				});
-			} else {
-				return get_db_instance(config).then(new_db_instance => {
-					db_instance = new_db_instance;
-					return create_transaction(db_instance, store_list, mode);
-				});
-			}
+		transaction: function(store_list, mode = 'readonly') {
+			return get_db_instance(config).then(db => {
+				let transaction;
+
+				transaction = db.transaction(store_list.map(store => {
+					return store.name;
+				}), mode);
+
+				return store_list.reduce((store_list, store_config) => {
+					let store = transaction.objectStore(store_config.name);
+
+					if ( store_config.index ) {
+						store = store.index(store.index);
+					}
+
+					store_list[store.name] = new Store(store);
+
+					return store_list;
+				}, {});
+			});
 		},
 
 		reset: function() {
 			return new Promise((resolve, reject) => {
 				let request = window.indexedDB.deleteDatabase(config.name);
-				db_instance = null;
 
 				request.addEventListener('success', resolve);
 				request.addEventListener('error', reject);
@@ -137,69 +142,59 @@ class Store {
 	}
 }
 
-function get_db_instance(config) {
-	return new Promise((resolve, reject) => {
-		let request;
+get_db_instance = (function() {
+	let instance_map = new Map();
 
-		if ( config.version !== undefined ) {
-			request = window.indexedDB.open(config.name, config.version);
-		} else {
-			request = window.indexedDB.open(config.name);
-		}
+	return function(config) {
+		return new Promise((resolve, reject) => {
+			if ( instance_map.has(config.name) ) {
+				console.log(instance_map.get(config.name));
+				resolve(instance_map.get(config.name));
+			} else {
+				let request;
 
-		request.addEventListener('upgradeneeded', evt => {
-			let db = evt.target.result;
-
-			config.stores.forEach(store => {
-				let object_store;
-
-				if(db.objectStoreNames.contains(store.name)) {
-					if ( store.options !== undefined ) {
-						db.deleteObjectStore(store.name);
-						object_store = db.createObjectStore(store.name, store.options);
-					}
+				if ( config.version !== undefined ) {
+					request = window.indexedDB.open(config.name, config.version);
 				} else {
-					object_store = db.createObjectStore(store.name, store.options);
+					request = window.indexedDB.open(config.name);
 				}
 
-				if ( store.index ) {
-					store.index.forEach(index => {
-						object_store.createIndex(index.name, index.keyPath || index.name, {unique: index.unique});
+				request.addEventListener('upgradeneeded', evt => {
+					let db = evt.target.result;
+
+					config.stores.forEach(store => {
+						let object_store;
+
+						if(db.objectStoreNames.contains(store.name)) {
+							if ( store.options !== undefined ) {
+								db.deleteObjectStore(store.name);
+								object_store = db.createObjectStore(store.name, store.options);
+							}
+						} else {
+							object_store = db.createObjectStore(store.name, store.options);
+						}
+
+						if ( store.index ) {
+							store.index.forEach(index => {
+								object_store.createIndex(index.name, index.keyPath || index.name, {unique: index.unique});
+							});
+						}
 					});
-				}
-			});
+				});
+
+				request.addEventListener('success', evt => {
+					instance_map.set(config.name, evt.target.result);
+					resolve(instance_map.get(config.name));
+				});
+
+				request.addEventListener('error', evt => {
+					evt.preventDefault();
+					reject(evt.target.error);
+				});
+			}
 		});
-
-		request.addEventListener('success', evt => {
-			resolve(evt.target.result);
-		});
-
-		request.addEventListener('error', evt => {
-			evt.preventDefault();
-			reject(evt.target.error);
-		});
-	});
-}
-
-function create_transaction(db, store_list, mode = 'readonly') {
-	let transaction;
-
-	transaction = db.transaction(store_list.map(store => {
-		return store.name;
-	}), mode);
-
-	return store_list.reduce((store_list, store_config) => {
-		let store = transaction.objectStore(store_config.name);
-
-		if ( store_config.index ) {
-			store = store.index(store.index);
-		}
-
-		store_list[store.name] = new Store(store);
-
-		return store_list;
-	}, {});
-}
+	};
+}());
 
 function update_store(type, data) {
 	return new Promise((resolve, reject) => {
