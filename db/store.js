@@ -4,7 +4,7 @@ let _store = window.Symbol('store'), get_db_instance;
 
 import ResultMap from '../common/resultmap';
 
-export default function store(config) {
+export default function(config) {
 	return {
 		store: function(store_name) {
 			let store_list = [{name: store_name}];
@@ -148,7 +148,6 @@ get_db_instance = (function() {
 	return function(config) {
 		return new Promise((resolve, reject) => {
 			if ( instance_map.has(config.name) ) {
-				console.log(instance_map.get(config.name));
 				resolve(instance_map.get(config.name));
 			} else {
 				let request;
