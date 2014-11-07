@@ -304,6 +304,7 @@
 		this[_elements].header.addEventListener('click', function(evt) {
 			var dir = '', column;
 			if ( evt.target.nodeName === 'A' ) {
+				evt.preventDefault();
 				column = evt.target.parentNode.dataset.id;
 
 				switch (evt.target.parentNode.dataset.order) {

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf8" />
+		<script src="/sys/polymer/components/platform/platform.js"></script>
+		<link rel="import" href="/lib/libjs/elements/table/table.html" />
+		<title>T-mail</title>
+		<style>
+			html { box-sizing: border-box; }
+			*, *:before, *:after { box-sizing: inherit; }
+			menu, body, html {
+				padding: 0;
+				margin: 0;
+			}
+			body, input, button {
+				background: #444;
+				color: #ddd;
+			}
+			input, button {
+				background: #333;
+			}
+			header menu:first-child {
+				padding: 10px;
+			}
+			header menu:first-child input {
+				width: 100%;
+				height: 4em;
+			}
+			sg-table {
+				width: 100%;
+			}
+		</style>
+	</head>
+	<body>
+		<header role="hud">
+			<menu>
+				<input type="text" />
+				<ul>
+					<li>
+					</li>
+				</ul>
+			</menu>
+			<menu>
+				<button>New</button>
+			</menu>
+		</header>
+		<section>
+		</section>
+		<footer>
+		</footer>
+		<sg-table></sg-table>
+		<script src="./table.json"></script>
+		<script>
+			document.querySelector('sg-table').columns = [
+				{id: 'id', name: 'Id', description: 'Id'},
+				{id: 'name', name: 'Name', search: true, description: 'Name'},
+				{id: 'age', name: 'Age', search: true, description: 'Age'},
+				{id: 'sum', name: 'Sum', search: true, sum: true, description: 'Sum'},
+				{id: 'gender', name: 'Gender', search: false}
+			];
+			document.querySelector('sg-table').page_size = 50;
+			document.querySelector('sg-table').data = window.gdata;
+		</script>
+	</body>
+</html>
+
