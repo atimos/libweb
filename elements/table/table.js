@@ -1,260 +1,345 @@
 (function(window, document, undefined) {
 	'use strict';
 
-	var table = Object.create(HTMLTableElement.prototype);
+	/* jshint validthis: true */
 
-	table.page = 0;
-	table.page_size = 10;
-	table.data = {
-		original: [],
-		rendered: [],
-	};
-	table.headers = [];
-	table.order_column = null;
-	table.order_direction = 'asc';
+	var _data = '_datas', _config = '_configs', _elements = '_elementss';
 
-	table.render_head = function() {
+	var SgTableProto = Object.create(HTMLTableElement.prototype);
 
-		if ( Array.isArray(this.headers) ) {
-			var new_head = document.createDocumentFragment();
-
-			this.headers.forEach(function(column) {
-				if ( column.sortable === true ) {
-					new_head.appendChild(templates.head.content.children[0].cloneNode(true));
-				} else {
-					new_head.appendChild(templates.head.content.children[1].cloneNode(true));
-				}
-
-				new_head.lastElementChild.children[0].textContent = column.name;
-				new_head.lastElementChild.dataset.id = column.id;
-			});
-
-			this.firstElementChild.firstElementChild.innerHTML = '';
-			this.firstElementChild.firstElementChild.appendChild(new_head);
+	Object.defineProperty(SgTableProto, _elements, {
+		writeable: false,
+		enumerable: false,
+		configurable: false,
+		value: {
+			search: document.querySelector('menu input'),
+			tpl: {
+				header: document.querySelector('template:nth-of-type(2)'),
+				body: document.querySelector('template:nth-of-type(3)'),
+				footer: document.querySelector('template:nth-of-type(4)')
+			},
+			header: null,
+			body: null,
+			root: null,
 		}
-	};
+	});
 
-	table.render_body = function() {
-		if ( Array.isArray(this.render_data) ) {
-			if ( this.order_column !== null ) {
-				var column = sort_options.column;
-				var direction = sort_options.direction || 'asc';
+	Object.defineProperty(SgTableProto, _data, {
+		writeable: false,
+		enumerable: false,
+		configurable: false,
+		value: {
+			delay: null,
+			query: '',
+			data: [],
+			dataview: [],
+			dataviewslice: [],
+			sumary: {},
+			page: 0,
+			changed: false,
+			is_attached: false
+		}
+	});
 
-				render_data.sort(function(a, b) {
+	Object.defineProperty(SgTableProto, _config, {
+		writeable: false,
+		enumerable: false,
+		configurable: false,
+		value: {
+			columns: [],
+			page_size: 10,
+			order_by: [{column: 'name'}, {column: 'age'}],
+		}
+	});
 
-					if ( direction  === 'asc' && a[column] < b[column] || direction === 'desc' && a[column] > b[column] ) {
-						return -1;
-					} else if ( direction  === 'asc' && a[column] > b[column] || direction === 'desc' && a[column] < b[column] ) {
-						return 1;
-					} else {
-						return 0;
+	Object.defineProperties(SgTableProto, {
+		page: {
+			get: function() { return this[_data].page; },
+			set: function() { throw(new TypeError('\'page\' is read-only')); }
+		},
+		sumary: {
+			get: function() { return this[_data].sumary; },
+			set: function() { throw(new TypeError('\'page\' is read-only')); }
+		},
+		page_size: {
+			configurable: false,
+			get: function() { return this[_config].page_size; },
+			set: function(value) {
+				this[_data].changed = true;
+				this[_config].page_size = value;
+				render.call(this);
+			}
+		},
+		columns: {
+			configurable: false,
+			get: function() { return this[_config].columns; },
+			set: function(value) {
+				this[_data].changed = true;
+				this[_config].columns = value;
+				render.call(this);
+			}
+		},
+		data: {
+			configurable: false,
+			get: function() { return this[_data].data; },
+			set: function(value) {
+				this[_data].changed = true;
+				this[_data].data = value;
+				render.call(this);
+		   }
+		},
+		order_by: {
+			configurable: false,
+			get: function() { return this[_config].order_by; },
+			set: function(value) {
+				this[_data].changed = true;
+				this[_config].order_by = value;
+				render.call(this);
+			}
+		},
+	});
+
+	Object.defineProperties(SgTableProto, {
+		search: {
+			writeable: false,
+			enumerable: false,
+			configurable: false,
+			value: function(query) {
+				query = query.toLowerCase();
+				clearTimeout(this[_data].delay);
+
+				this[_data].delay = setTimeout(function() {
+					if ( this[_data].query !== query ) {
+						this[_data].page = 0;
+						this[_data].changed = true;
+						this[_data].query = query;
+
+						render.call(this);
 					}
-				});
+				}.bind(this), 200);
 			}
-
-		var new_body = document.createDocumentFragment();
-		var end = render_data.length;
-
-		if ( options.pagination_step ) {
-			end = current_position + options.pagination_step;
-		}
-
-		render_data.slice(current_position, end).forEach(function(row) {
-			var row_node = document.createElement('tr');
-			row_node.dataset.id = row[options.row_id];
-
-			options.headers.forEach(function(column) {
-				var column_node = templates.body.content.cloneNode(true).children[0];
-				column_node.textContent = row[column.id];
-				column_node.dataset.value = row[column.id];
-				row_node.appendChild(column_node);
-			});
-
-			new_body.appendChild(row_node);
-		});
-
-		table.children[1].innerHTML = '';
-		table.children[1].appendChild(new_body);
-
-		pagination.children[2].textContent = current_position + 1;
-		pagination.children[3].textContent = (current_position + options.pagination_step > render_data.length? render_data.length:current_position + options.pagination_step);
-		pagination.children[4].textContent = render_data.length;
-		pagination.children[5].textContent = data.length;
-		}
-	};
-
-	table.attachedCallback = function() {
-		console.log(this);
-		this.templates = {
-			head: this.querySelector('template:nth-of-type(1)'),
-			body: this.querySelector('template:nth-of-type(2)'),
-			foot: this.querySelector('template:nth-of-type(3)')
-		};
-		console.log(this.templates);
-	};
-
-	table.attributeChangedCallback = function(attribute, old_value, new_value) {
-		if ( attribute === 'page_size' ) {
-			if ( this.data.length > 0 ) {
-				this.render_body();
+		},
+		jump_to: {
+			writeable: false,
+			enumerable: false,
+			configurable: false,
+			value: function(page) {
+				this[_data].page = page;
+				this[_data].changed = true;
+				render.call(this);
 			}
-
-			this.render_foot();
-		} else if ( attribute === 'headers' ) {
-			this.headers = JSON.parse(new_value);
-			this.render_head();
-
-			if ( this.data.length > 0 ) {
-				this.render_body();
-			}
-
-			this.render_foot();
-		}
-		if ( attribute === 'data' ) {
-			this.data = JSON.parse(new_value);
-
-			if ( this.data.length > 0 ) {
-				this.render_body();
-			}
-
-			this.render_foot();
-		}
-	};
-
-	var test = document.registerElement('sg-table', {prototype: table});
-
-	function render_body() {
-	}
-
-	function render_foot() {
-		var pagination_sum = document.createDocumentFragment();
-		var search_sum = document.createDocumentFragment();
-		var total_sum = document.createDocumentFragment();
-		var end = render_data.length;
-
-		if ( options.pagination_step ) {
-			end = current_position + options.pagination_step;
-		}
-
-		calculate_sum(render_data, current_position, end).forEach(function(column) {
-			pagination_sum.appendChild(templates.foot.content.cloneNode(true));
-			pagination_sum.lastElementChild.textContent = column.value;
-			pagination_sum.lastElementChild.dataset.id = column.id;
-			pagination_sum.lastElementChild.dataset.value = column.id;
-
-		});
-
-		calculate_sum(render_data, 0, render_data.length).forEach(function(column) {
-			search_sum.appendChild(templates.foot.content.cloneNode(true));
-			search_sum.lastElementChild.textContent = column.value;
-			search_sum.lastElementChild.dataset.id = column.id;
-			search_sum.lastElementChild.dataset.value = column.id;
-		});
-
-		calculate_sum(data, 0, data.length).forEach(function(column) {
-			total_sum.appendChild(templates.foot.content.cloneNode(true));
-			total_sum.lastElementChild.textContent = column.value;
-			total_sum.lastElementChild.dataset.id = column.id;
-			total_sum.lastElementChild.dataset.value = column.id;
-
-		});
-
-		table.children[2].children[0].innerHTML = '';
-		table.children[2].children[0].appendChild(pagination_sum);
-		table.children[2].children[1].innerHTML = '';
-		table.children[2].children[1].appendChild(search_sum);
-		table.children[2].children[2].innerHTML = '';
-		table.children[2].children[2].appendChild(total_sum);
-	}
-
-	function calculate_sum(data, start, stop) {
-		var columns = new Array(options.headers.length -1);
-
-		return data.slice(start, stop).reduce(function(columns, row) {
-			options.headers.forEach(function(column, column_pos) {
-				if ( columns[column_pos] === undefined ) {
-					if ( column.sum === true ) {
-						columns[column_pos] = {id: column.id, value: 0};
-					} else {
-						columns[column_pos] = {id: column.id, value: ''};
-					}
-				}
-
-				if ( column.sum === true ) {
-					columns[column_pos].value += row[column.id];
-				}
-			});
-			return columns;
-		}, columns);
-	}
+		},
+	});
 
 	function render() {
+		if ( this[_data].changed === true ) {
+			generate_viewdata.call(this);
+			generate_sumary.call(this);
+			this[_data].changed = false;
+		}
 
+		if ( this[_data].is_attached ) {
+			if ( this[_elements].tpl.header ) {
+				render_header.call(this);
+			}
+			if ( this[_elements].tpl.body ) {
+				render_body.call(this);
+			}
+			if ( this[_elements].tpl.footer ) {
+				render_footer.call(this);
+			}
+		}
 	}
 
-	function search(query) {
-		current_position = 0;
+	function generate_viewdata() {
+		var dataview, query = this[_data].query, pos;
 
 		if ( query === '' ) {
-			render_data = data;
+			dataview = this[_data].data.slice(0);
 		} else {
-			render_data = data.filter(function(item) {
-				return options.headers.some(function(column) {
-					if ( column.searchable === true ) {
-						switch ( Object.prototype.toString.call(item[column.id]) ) {
+			dataview = this[_data].data.filter(function(item) {
+				return this.columns.some(function(column) {
+					var value = item[column.id];
+					if ( column.search === true ) {
+						switch ( Object.prototype.toString.call(value) ) {
 							case '[object String]':
-								if ( item[column.id].toLowerCase().indexOf(query) !== -1 ) {
-								return true;
-							}
-							break;
+								if ( value.toLowerCase().indexOf(query) !== -1 ) {
+									return true;
+								}
+								break;
 							case '[object Number]':
-								if ( item[column.id] === parseInt(query) ) {
-								return true;
-							}
-							break;
+								if ( value === parseInt(query) ) {
+									return true;
+								}
+								break;
 							case '[object Boolean]':
-								if ( item[column.id].toString() === query ) {
-								return true;
-							}
-							break;
+								if ( value.toString() === query ) {
+									return true;
+								}
+								break;
 							default:
-								if ( item[column.id] === query ) {
-								return true;
-							}
+								if ( value === query ) {
+									return true;
+								}
 						}
 					}
 				});
+			}.bind(this));
+		}
+
+		this.order_by.reduce(function(order_by, item) {
+			order_by.unshift(item);
+			return order_by;
+		}, []).forEach(function(order_by) {
+			var dir = order_by.direction || 'asc',
+				col = order_by.column;
+
+			dataview.sort(function(a, b) {
+				if ( dir  === 'asc' && a[col] < b[col] || dir === 'desc' && a[col] > b[col] ) {
+					return -1;
+				} else if ( dir  === 'asc' && a[col] > b[col] || dir === 'desc' && a[col] < b[col] ) {
+					return 1;
+				} else {
+					return 0;
+				}
 			});
+		});
+
+		this[_data].dataview = dataview;
+
+		pos = this[_data].page * this.page_size;
+		this[_data].dataviewslice = this[_data].dataview.slice(pos, pos + this.page_size);
+	}
+
+	function generate_sumary() {
+		this[_data].sumary = this.columns.map(function(col) {
+			if ( col.sum === true ) {
+				return col.id;
+			} else {
+				return null;
+			}
+		}).filter(function(id) {
+			return (id !== null);
+		}).reduce(function(result, id) {
+			result[id] = {
+				data: this[_data].data.reduce(function(result, item) { return result += item[id]; }, 0),
+				dataview: this[_data].dataview.reduce(function(result, item) { return result += item[id]; }, 0),
+				dataviewslice: this[_data].dataviewslice.reduce(function(result, item) { return result += item[id]; }, 0),
+			};
+
+			return result;
+		}.bind(this), {});
+	}
+
+	function render_header() {
+		if ( Array.isArray(this.columns) ) {
+			var header = window.document.createDocumentFragment();
+
+			this.columns.forEach(function(column) {
+				header.appendChild(this[_elements].tpl.header.content.children[0].cloneNode(true));
+				header.lastElementChild.children[0].textContent = column.name;
+				header.lastElementChild.dataset.id = column.id;
+			}.bind(this));
+
+			this[_elements].header.innerHTML = '';
+			this[_elements].header.appendChild(header);
 		}
 	}
 
-	/*
-	table.children[0].addEventListener('click', function(evt) {
-		if ( evt.target.nodeName === 'A' ) {
-			var column = evt.target.parentNode;
+	function render_body() {
+		var body = document.createDocumentFragment();
 
-			if ( sort_options.column !== column.dataset.id ) {
-				sort_options.column = column.dataset.id;
+		this[_data].dataviewslice.forEach(function(item) {
+			var row = document.createElement('tr');
+
+			this.columns.forEach(function(column_config) {
+				var column = this[_elements].tpl.body.content.cloneNode(true);
+
+				column.children[0].dataset.value = item[column_config.id];
+				column.children[0].textContent = item[column_config.id];
+				row.appendChild(column);
+			}.bind(this));
+
+			body.appendChild(row);
+		}.bind(this));
+
+		this[_elements].body.innerHTML = '';
+		this[_elements].body.appendChild(body);
+	}
+
+	function render_footer() {
+		this[_elements].footer.children[0].innerHTML = '';
+		this[_elements].footer.children[1].innerHTML = '';
+		this[_elements].footer.children[2].innerHTML = '';
+
+		this.columns.forEach(function(column_config) {
+			var sumary = this[_data].sumary[column_config.id],
+				data = this[_elements].tpl.footer.content.cloneNode(true).children[0],
+				dataview = this[_elements].tpl.footer.content.cloneNode(true).children[0],
+				dataviewslice = this[_elements].tpl.footer.content.cloneNode(true).children[0];
+
+			if ( sumary !== undefined ) {
+				data.textContent = sumary.data;
+				dataview.textContent = sumary.dataview;
+				dataviewslice.textContent = sumary.dataviewslice;
 			}
 
-			sort_options.direction = column.dataset.direction = (column.dataset.direction === 'desc'? 'asc':'desc');
-			render();
-			evt.preventDefault();
+			this[_elements].footer.children[0].appendChild(dataviewslice);
+			this[_elements].footer.children[1].appendChild(dataview);
+			this[_elements].footer.children[2].appendChild(data);
+		}.bind(this));
+	}
+
+	SgTableProto.attachedCallback = function() {
+		this[_data].is_attached = true;
+		render.call(this);
+	};
+
+	SgTableProto.createdCallback = function() {
+		this.appendChild(document.importNode(document.querySelector('template:nth-of-type(1)').content, true));
+		this[_elements].header = this.children[2].children[0];
+		this[_elements].body = this.children[2].children[1];
+		this[_elements].footer = this.children[2].children[2];
+
+		this[_elements].header.addEventListener('click', function(evt) {
+			var dir = '', column;
+			if ( evt.target.nodeName === 'A' ) {
+				column = evt.target.parentNode.dataset.id;
+
+				switch (evt.target.parentNode.dataset.order) {
+					case 'asc':
+						dir = 'desc';
+						break;
+					case 'desc':
+						dir = '';
+						break;
+					default:
+						dir = 'asc';
+				}
+				this.order_by = [{column: column, direction: dir}];
+
+				Array.prototype.forEach.call(this[_elements].header.querySelectorAll('th'), function(node) {
+					if ( node.dataset.id === column ) {
+						node.dataset.order = dir;
+					} else {
+						node.dataset.order = '';
+					}
+			   });
+			}
+		}.bind(this));
+
+		this[_elements].search = this.querySelector('menu input');
+
+		if ( this[_elements].search ) {
+			this[_elements].search.addEventListener('keyup', function(evt) {
+				this.search(evt.target.value);
+			}.bind(this));
 		}
-	}, false);
+	};
 
-	search_input.addEventListener('keypress', (function() {
-		var delay = null;
+	window.document.registerElement('sg-table', { prototype: SgTableProto });
 
-		return function(evt) {
-			clearTimeout(delay);
-
-			delay = setTimeout(function() {
-				search(evt.target.value);
-				render();
-			}, 300);
-		};
-	}()));
+	/*
 
 	pagination.addEventListener('click', function(evt) {
 		if ( evt.target.dataset.action !== '' ) {
@@ -284,4 +369,4 @@
 		render();
 	}, 100);
    */
-}(window, window.document, void(0)));
+}(window, window.document.currentScript.ownerDocument, void(0)));

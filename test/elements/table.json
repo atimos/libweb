@@ -1,14 +1,3 @@
-window.goptions = {
-	headers: [
-		{id: 'id', name: 'Id', sortable: true, description: 'Id'},
-		{id: 'name', name: 'Name', sortable: true, searchable: true, description: 'Name'},
-		{id: 'age', name: 'Age', sortable: true, searchable: true, description: 'Age'},
-		{id: 'sum', name: 'Sum', sortable: true, searchable: true, sum: true, description: 'Sum'},
-		{id: 'gender', name: 'Gender', sortable: false, searchable: true}
-	],
-	pagination_step: 10
-};
-
 window.gdata = [
   {
     "id": 0,
