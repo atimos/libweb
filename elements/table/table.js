@@ -161,12 +161,14 @@
 			if ( this[_elements].tpl.footer ) {
 				render_footer.call(this);
 			}
-			render_pagination.call(this);
+			if ( this[_elements].tpl.pagination ) {
+				render_pagination.call(this);
+			}
 		}
 	}
 
 	function generate_viewdata() {
-		var dataview, query = this[_data].query, pos;
+		var dataview, query = this[_data].query;
 
 		if ( query === '' ) {
 			dataview = this[_data].data.slice(0);
