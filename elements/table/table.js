@@ -53,7 +53,7 @@
 		value: {
 			columns: [],
 			page_size: 10,
-			order_by: [{column: 'name'}, {column: 'age'}],
+			order_by: [],
 		}
 	});
 
@@ -262,6 +262,14 @@
 
 			this.columns.forEach(function(column) {
 				header.appendChild(this[_elements].tpl.header.content.children[0].cloneNode(true));
+
+				this[_config].order_by.some(function(order_item) {
+					if ( order_item.column === column.id ) {
+						header.lastElementChild.dataset.order = order_item.direction || 'asc';
+						return true;
+					}
+				});
+
 				header.lastElementChild.children[0].textContent = column.name;
 				header.lastElementChild.dataset.id = column.id;
 			}.bind(this));
