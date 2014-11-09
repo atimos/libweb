@@ -141,12 +141,12 @@
 	function render() {
 		if ( this[_data].changed === true ) {
 			generate_viewdata.call(this);
-			generate_sumary.call(this);
 		}
 
 		generate_viewdataslice.call(this);
 
 		if ( this[_data].changed === true ) {
+			calculate_sumary.call(this);
 			calculate_pagination.call(this);
 			this[_data].changed = false;
 		}
@@ -229,7 +229,7 @@
 		this[_data].dataviewslice = this[_data].dataview.slice(pos, pos + this.page_size);
 	}
 
-	function generate_sumary() {
+	function calculate_sumary() {
 		this[_data].sumary = this.columns.map(function(col) {
 			if ( col.sum === true ) {
 				return col.id;
@@ -251,6 +251,9 @@
 
 	function calculate_pagination() {
 		this[_data].pagination.pages = Math.ceil(this[_data].dataview.length / this[_config].page_size);
+		if ( this[_data].pagination.pages === 0 ) {
+			this[_data].pagination.pages = 1;
+		}
 	}
 
 	function render_header() {
@@ -277,7 +280,6 @@
 			this.columns.forEach(function(column_config) {
 				var column = this[_elements].tpl.body.content.cloneNode(true);
 
-				column.children[0].dataset.value = item[column_config.id];
 				column.children[0].textContent = item[column_config.id];
 				row.appendChild(column);
 			}.bind(this));
