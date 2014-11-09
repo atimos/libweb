@@ -16,10 +16,12 @@
 			tpl: {
 				header: document.querySelector('template:nth-of-type(2)'),
 				body: document.querySelector('template:nth-of-type(3)'),
-				footer: document.querySelector('template:nth-of-type(4)')
+				footer: document.querySelector('template:nth-of-type(4)'),
+				pagination: document.querySelector('template:nth-of-type(5)')
 			},
 			header: null,
 			body: null,
+			pagination: null,
 			root: null,
 		}
 	});
@@ -35,7 +37,10 @@
 			dataview: [],
 			dataviewslice: [],
 			sumary: {},
-			page: 0,
+			pagination: {
+				page: 1,
+				pages: 0
+			},
 			changed: false,
 			is_attached: false
 		}
@@ -53,13 +58,16 @@
 	});
 
 	Object.defineProperties(SgTableProto, {
-		page: {
-			get: function() { return this[_data].page; },
-			set: function() { throw(new TypeError('\'page\' is read-only')); }
-		},
 		sumary: {
 			get: function() { return this[_data].sumary; },
 			set: function() { throw(new TypeError('\'page\' is read-only')); }
+		},
+		page: {
+			get: function() { return this[_data].pagination.page; },
+			set: function(page) {
+				this[_data].pagination.page = page;
+				render.call(this);
+			}
 		},
 		page_size: {
 			configurable: false,
@@ -110,7 +118,7 @@
 
 				this[_data].delay = setTimeout(function() {
 					if ( this[_data].query !== query ) {
-						this[_data].page = 0;
+						this.jump_to(1);
 						this[_data].changed = true;
 						this[_data].query = query;
 
@@ -124,8 +132,7 @@
 			enumerable: false,
 			configurable: false,
 			value: function(page) {
-				this[_data].page = page;
-				this[_data].changed = true;
+				this[_data].pagination.page = page;
 				render.call(this);
 			}
 		},
@@ -135,6 +142,12 @@
 		if ( this[_data].changed === true ) {
 			generate_viewdata.call(this);
 			generate_sumary.call(this);
+		}
+
+		generate_viewdataslice.call(this);
+
+		if ( this[_data].changed === true ) {
+			calculate_pagination.call(this);
 			this[_data].changed = false;
 		}
 
@@ -148,6 +161,7 @@
 			if ( this[_elements].tpl.footer ) {
 				render_footer.call(this);
 			}
+			render_pagination.call(this);
 		}
 	}
 
@@ -206,8 +220,10 @@
 		});
 
 		this[_data].dataview = dataview;
+	}
 
-		pos = this[_data].page * this.page_size;
+	function generate_viewdataslice() {
+		var pos = (this.page - 1) * this.page_size;
 		this[_data].dataviewslice = this[_data].dataview.slice(pos, pos + this.page_size);
 	}
 
@@ -229,6 +245,10 @@
 
 			return result;
 		}.bind(this), {});
+	}
+
+	function calculate_pagination() {
+		this[_data].pagination.pages = Math.ceil(this[_data].dataview.length / this[_config].page_size);
 	}
 
 	function render_header() {
@@ -273,7 +293,7 @@
 		this[_elements].footer.children[2].innerHTML = '';
 
 		this.columns.forEach(function(column_config) {
-			var sumary = this[_data].sumary[column_config.id],
+			var sumary = this.sumary[column_config.id],
 				data = this[_elements].tpl.footer.content.cloneNode(true).children[0],
 				dataview = this[_elements].tpl.footer.content.cloneNode(true).children[0],
 				dataviewslice = this[_elements].tpl.footer.content.cloneNode(true).children[0];
@@ -290,16 +310,36 @@
 		}.bind(this));
 	}
 
-	SgTableProto.attachedCallback = function() {
-		this[_data].is_attached = true;
-		render.call(this);
-	};
+	function render_pagination() {
+		var pagination = this[_elements].tpl.pagination.content.cloneNode(true),
+			page = pagination.querySelector('[data-value="page"]'),
+			pages = pagination.querySelector('[data-value="pages"]'),
+			rows = pagination.querySelector('[data-value="rows"]'),
+			rows_total = pagination.querySelector('[data-value="rows-total"]');
 
-	SgTableProto.createdCallback = function() {
-		this.appendChild(document.importNode(document.querySelector('template:nth-of-type(1)').content, true));
-		this[_elements].header = this.children[2].children[0];
-		this[_elements].body = this.children[2].children[1];
-		this[_elements].footer = this.children[2].children[2];
+		if ( page ) {
+			page.textContent = this.page;
+		}
+		if ( pages ) {
+			pages.textContent = this[_data].pagination.pages;
+		}
+		if ( rows ) {
+			rows.textContent = this[_data].dataview.length;
+		}
+		if ( rows_total ) {
+			rows_total.textContent = this[_data].data.length;
+		}
+
+		this[_elements].pagination.innerHTML = '';
+		this[_elements].pagination.appendChild(pagination);
+	}
+
+	function add_event_handlers() {
+		if ( this[_elements].search ) {
+			this[_elements].search.addEventListener('keyup', function(evt) {
+				this.search(evt.target.value);
+			}.bind(this));
+		}
 
 		this[_elements].header.addEventListener('click', function(evt) {
 			var dir = '', column;
@@ -310,10 +350,10 @@
 				switch (evt.target.parentNode.dataset.order) {
 					case 'asc':
 						dir = 'desc';
-						break;
+					break;
 					case 'desc':
 						dir = '';
-						break;
+					break;
 					default:
 						dir = 'asc';
 				}
@@ -325,49 +365,50 @@
 					} else {
 						node.dataset.order = '';
 					}
-			   });
+				});
 			}
 		}.bind(this));
 
-		this[_elements].search = this.querySelector('menu input');
+		this[_elements].pagination.addEventListener('click', function(evt) {
+			if ( evt.target.nodeName === 'A' ) {
+				var page = this.page;
 
-		if ( this[_elements].search ) {
-			this[_elements].search.addEventListener('keyup', function(evt) {
-				this.search(evt.target.value);
-			}.bind(this));
-		}
+				evt.preventDefault();
+
+				switch ( evt.target.dataset.action ) {
+					case 'first':
+						page = 0;
+						break;
+					case 'last':
+						page = this[_data].pagination.pages;
+						break;
+					case 'previous':
+						page = (page>0?page-1:0);
+						break;
+					case 'next':
+						page = (page<this[_data].pagination.pages?page+1:this[_data].pagination.pages);
+						break;
+				}
+				this.jump_to(page);
+			}
+		}.bind(this));
+
+	}
+
+	SgTableProto.attachedCallback = function() {
+		this[_data].is_attached = true;
+		render.call(this);
+	};
+
+	SgTableProto.createdCallback = function() {
+		this.appendChild(document.importNode(document.querySelector('template:nth-of-type(1)').content, true));
+		this[_elements].header = this.children[2].children[0];
+		this[_elements].body = this.children[2].children[1];
+		this[_elements].footer = this.children[2].children[2];
+		this[_elements].search = this.querySelector('menu input');
+		this[_elements].pagination = this.querySelector('nav');
+		add_event_handlers.call(this);
 	};
 
 	window.document.registerElement('sg-table', { prototype: SgTableProto });
-
-	/*
-
-	pagination.addEventListener('click', function(evt) {
-		if ( evt.target.dataset.action !== '' ) {
-			if ( evt.target.dataset.action === 'first' ) {
-				current_position = 0;
-			} else if ( evt.target.dataset.action === 'previous' ) {
-				current_position -= options.pagination_step;
-			} else if ( evt.target.dataset.action === 'next' ) {
-				current_position += options.pagination_step;
-			} else if ( evt.target.dataset.action === 'last' ) {
-				current_position = render_data.length - options.pagination_step;
-			}
-
-			if ( current_position < 0 ) {
-				current_position = 0;
-			} else if ( current_position + 1 > render_data.length ) {
-				current_position -= options.pagination_step;
-			}
-
-			evt.preventDefault();
-			render();
-		}
-	});
-
-	setTimeout(function() {
-		init(goptions, window.gdata);
-		render();
-	}, 100);
-   */
 }(window, window.document.currentScript.ownerDocument, void(0)));

@@ -21,6 +21,9 @@
 		sg-table tfoot th {
 			text-align: left;
 		}
+		sg-table nav {
+			text-align: center;
+		}
 	</style>
 
 	<menu>
@@ -36,13 +39,7 @@
 		</tfoot>
 	</table>
 	<nav>
-		<a href="#" data-action="first">First</a>
-		<a href="#" data-action="previous">Previous</a>
-		<span></span> - <span></span> / <span></span> // <span></span>
-		<a href="#" data-action="next">Next</a>
-		<a href="#" data-action="last">End</a>
 	</nav>
-
 </template>
 
 <template>
@@ -55,4 +52,12 @@
 
 <template>
 	<th></th>
+</template>
+
+<template>
+	<a href="#" data-action="first">First</a>
+	<a href="#" data-action="previous">Previous</a>
+	<span data-value="page"></span> / <span data-value="pages"></span> || <span data-value="rows"></span> / <span data-value="rows-total"></span>
+	<a href="#" data-action="next">Next</a>
+	<a href="#" data-action="last">End</a>
 </template>
