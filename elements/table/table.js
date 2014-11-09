@@ -352,13 +352,14 @@
 				switch (evt.target.parentNode.dataset.order) {
 					case 'asc':
 						dir = 'desc';
-					break;
+						break;
 					case 'desc':
 						dir = '';
-					break;
+						break;
 					default:
 						dir = 'asc';
 				}
+
 				this.order_by = [{column: column, direction: dir}];
 
 				Array.prototype.forEach.call(this[_elements].header.querySelectorAll('th'), function(node) {
