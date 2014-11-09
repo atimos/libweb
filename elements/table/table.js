@@ -380,13 +380,13 @@
 
 				switch ( evt.target.dataset.action ) {
 					case 'first':
-						page = 0;
+						page = 1;
 						break;
 					case 'last':
 						page = this[_data].pagination.pages;
 						break;
 					case 'previous':
-						page = (page>0?page-1:0);
+						page = (page>1?page-1:1);
 						break;
 					case 'next':
 						page = (page<this[_data].pagination.pages?page+1:this[_data].pagination.pages);
