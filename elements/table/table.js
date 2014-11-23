@@ -5,9 +5,9 @@
 
 	var _data = '_datas', _config = '_configs', _elements = '_elementss';
 
-	var SgTableProto = Object.create(HTMLTableElement.prototype);
+	var proto = Object.create(HTMLTableElement.prototype);
 
-	Object.defineProperty(SgTableProto, _elements, {
+	Object.defineProperty(proto, _elements, {
 		writeable: false,
 		enumerable: false,
 		configurable: false,
@@ -26,7 +26,7 @@
 		}
 	});
 
-	Object.defineProperty(SgTableProto, _data, {
+	Object.defineProperty(proto, _data, {
 		writeable: false,
 		enumerable: false,
 		configurable: false,
@@ -46,7 +46,7 @@
 		}
 	});
 
-	Object.defineProperty(SgTableProto, _config, {
+	Object.defineProperty(proto, _config, {
 		writeable: false,
 		enumerable: false,
 		configurable: false,
@@ -57,7 +57,7 @@
 		}
 	});
 
-	Object.defineProperties(SgTableProto, {
+	Object.defineProperties(proto, {
 		sumary: {
 			get: function() { return this[_data].sumary; },
 			set: function() { throw(new TypeError('\'page\' is read-only')); }
@@ -107,7 +107,7 @@
 		},
 	});
 
-	Object.defineProperties(SgTableProto, {
+	Object.defineProperties(proto, {
 		search: {
 			writeable: false,
 			enumerable: false,
@@ -408,12 +408,12 @@
 
 	}
 
-	SgTableProto.attachedCallback = function() {
+	proto.attachedCallback = function() {
 		this[_data].is_attached = true;
 		render.call(this);
 	};
 
-	SgTableProto.createdCallback = function() {
+	proto.createdCallback = function() {
 		this.appendChild(document.importNode(document.querySelector('template:nth-of-type(1)').content, true));
 		this[_elements].header = this.children[2].children[0];
 		this[_elements].body = this.children[2].children[1];
@@ -423,5 +423,5 @@
 		add_event_handlers.call(this);
 	};
 
-	window.document.registerElement('sg-table', { prototype: SgTableProto });
+	window.document.registerElement('tt-table', { prototype: proto });
 }(window, window.document.currentScript.ownerDocument, void(0)));
