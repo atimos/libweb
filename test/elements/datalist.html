@@ -3,27 +3,28 @@
 	<head>
 		<meta charset="utf8" />
 		<script src="/sys/polymer/components/platform/platform.js"></script>
-		<link rel="import" href="/lib/libjs/elements/datalist/datalist.html" />
+		<link rel="import" href="/lib/libweb/elements/datalist/datalist.html" />
 		<title>sg-datalist</title>
 	</head>
 	<body>
 		<input type="text" id="foo">
-		<tt-datalist target="#foo"></tt-datalist>
+		<tt-datalist target="#foo">
+			<template>
+				<option><span data-key="value"></span></option>
+			</template>
+		</tt-datalist>
 		<script src="./datalist.json"></script>
 		<script>
-			document.querySelector('tt-datalist').list = [
+			document.querySelector('tt-datalist').addEventListener('select', function(evt) {
+				console.log(evt.detail);
+			});
+			document.querySelector('tt-datalist').update([
 				{value: 'id'},
 				{value: 'name'},
 				{value: 'age'},
 				{value: 'sum'},
 				{value: 'gender'}
-			];
-			document.querySelector('tt-datalist').addEventListener('render_item', function(evt) {
-				evt.detail.node.textContent = 'f';
-			});
-			document.querySelector('tt-datalist').addEventListener('select', function(evt) {
-				console.log(evt.detail);
-			});
+			]);
 		</script>
 	</body>
 </html>

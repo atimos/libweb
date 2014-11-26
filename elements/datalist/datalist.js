@@ -7,17 +7,13 @@
 
 	var proto = Object.create(window.HTMLDataListElement.prototype);
 
-	var tpl = {
-		item: document.querySelector('template:nth-of-type(2)')
-	};
-
 	Object.defineProperty(proto, _elements, {
 		writeable: false,
 		enumerable: false,
 		configurable: false,
 		value: {
-			root: null,
-			targets: null
+			targets: null,
+			tpl: null
 		}
 	});
 
@@ -28,75 +24,54 @@
 		value: {
 			list: [],
 			selected: -1,
-			changed: false,
 			is_attached: false
 		}
 	});
 
 	Object.defineProperties(proto, {
-		list: {
-			configurable: false,
-			get: function() { return this[_data].list; },
-			set: function(list) {
-				this[_data].list = list;
-				this[_data].changed = true;
-				render.call(this);
-			}
-		},
 		value: {
 			configurable: false,
 			get: function() {
-				if ( this.list[this[_data].selected] !== undefined ) {
-					return this.list[this[_data].selected].value;
-				} else {
-					return undefined;
-				}
+				return this[_data].list[this[_data].selected];
 			},
 			set: function() { throw(new TypeError('\'value\' is read-only')); }
-		}
-	});
-
-	Object.defineProperty(proto, 'reset', {
-		writeable: false,
-		enumerable: false,
-		configurable: false,
-		value: function() {
-			this[_data].selected = -1;
-			this.list = [];
-		}
+		},
+		update: {
+			writeable: false,
+			enumerable: false,
+			configurable: false,
+			value: function(list) {
+				this[_data].selected = -1;
+				this[_data].list = list;
+				render.call(this);
+			}
+		},
 	});
 
 	function render() {
-		var nodelist = document.createDocumentFragment();
+		var tpl, nodelist = document.createDocumentFragment();
 
-		if ( this[_data].changed === true && this[_data].is_attached === true ) {
+		if ( this[_data].is_attached === true ) {
+			tpl = this.querySelector('template');
+
+			if ( !tpl ) {
+				tpl = document.querySelector('template');
+			}
+
 			this[_data].list.forEach(function(item) {
-				var detail, node = tpl.item.content.cloneNode(true).firstElementChild;
-				node.textContent = (item.name!==undefined?item.name:item.value);
-
-				detail = {
-					node: node,
-					item: item
-				};
-
-				this.dispatchEvent(new CustomEvent( 'render_item', {
-					detail: detail,
-					bubbles: true,
-					cancelable: true
-				}));
-
-				if ( detail.node instanceof HTMLElement || detail.node instanceof Node ) {
-					nodelist.appendChild(detail.node.cloneNode(true));
-				}
+				nodelist.appendChild(render_tpl(tpl, item));
 			}.bind(this));
 
-			this[_elements].root.innerHTML = '';
-			this[_elements].root.appendChild(nodelist);
+			Array.prototype.forEach.call(this.querySelectorAll('tt-datalist > *:not(template'), function(node) {
+				this.removeChild(node);
+			}.bind(this));
+
+			this.appendChild(nodelist);
 		}
 	}
 
 	function render_selected() {
-		Array.prototype.forEach.call(this[_elements].root.children, function(node, index) {
+		Array.prototype.forEach.call(this.children, function(node, index) {
 			if ( index === this[_data].selected ) {
 				node.classList.add('selected');
 			} else {
@@ -105,28 +80,13 @@
 		}.bind(this));
 	}
 
-	function select_previous() {
-		var pos = this[_data].selected;
-
-		if ( pos < 0 ) {
-			pos = 0;
-		} else if ( pos !== 0 ) {
-			pos -= 1;
-		}
-
-		this[_data].selected = pos;
-		render_selected.call(this);
-	}
-
-	function select_next() {
-		var pos = this[_data].selected;
+	function select_sibling(direction) {
+		var pos = this[_data].selected + (direction==='previous'?-1:+1);
 
 		if ( pos < 0 ) {
 			pos = 0;
 		} else if ( pos >= this[_data].list.length - 1 ) {
 			pos = this[_data].list.length - 1 ;
-		} else {
-			pos += 1;
 		}
 
 		this[_data].selected = pos;
@@ -138,24 +98,24 @@
 			if ( item !== evt.target ) { return false; }
 			var key = evt.keyCode;
 
-			if ( this.list.length > 0 ) {
-				if ( key === 38 || ( key === 9 && evt.shiftKey ) ) {
+			if ( this[_data].list.length > 0 ) {
+				if ( key === 27 ) {
+					this.update([]);
 					evt.preventDefault();
-					select_previous.call(this);
+				} else if ( key === 38 || ( key === 9 && evt.shiftKey ) ) {
+					evt.preventDefault();
+					select_sibling.call(this, 'previous');
 				} else if ( key === 40 || ( key === 9 && !evt.shiftKey ) ) {
 					evt.preventDefault();
-					select_next.call(this);
+					select_sibling.call(this, 'next');
 				} else if ( key === 13 ) {
 					if ( this[_data].selected >= 0 ) {
-						var value = this.value;
-
-						this.list = [];
 						evt.preventDefault();
 
-						if ( value !== undefined ) {
+						if ( this.value !== undefined ) {
 							this.dispatchEvent(new CustomEvent('select', {
 								detail: {
-									value: value,
+									value: this.value,
 									target: item
 								},
 								bubbles: true,
@@ -174,6 +134,7 @@
 		this[_data].is_attached = true;
 
 		this[_data].targets = window.Array.prototype.slice.call(window.document.querySelectorAll(this.getAttribute('target')), 0);
+
 		window.addEventListener('keydown', keydown_event.bind(this));
 		render.bind(this);
 	};
@@ -182,16 +143,32 @@
 		window.removeEventListener('keydown', keydown_event.bind(this));
 	};
 
-	proto.createdCallback = function() {
-		this.appendChild(document.importNode(document.querySelector('template:nth-of-type(1)').content, true));
-		this[_elements].root = this.querySelector('ul');
-	};
-
 	proto.attributeChangedCallback = function(name, old_value, new_value) {
 		if ( name === 'targets' ) {
 			this[_data].targets = window.Array.prototype.slice.call(window.document.querySelectorAll(new_value), 0);
 		}
 	};
 
+	function render_tpl(tpl, data) {
+		var element = tpl.content.cloneNode(true).firstElementChild;
+
+		if ( data.value !== undefined ) {
+			element.value = data.value;
+		}
+
+		Array.prototype.forEach.call(element.querySelectorAll('[data-key]'), function(node) {
+			node.dataset.key.split('|').some(function(key) {
+				if ( data[key] !== undefined ) {
+					node.textContent = data[key];
+					return true;
+				}
+			});
+			delete node.dataset.key;
+		});
+
+		return element;
+	}
+
 	window.document.registerElement('tt-datalist', { prototype: proto });
+
 }(window, window.document.currentScript.ownerDocument, void(0)));
