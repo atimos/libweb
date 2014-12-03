@@ -1,6 +1,6 @@
 'use strict';
 
-let _map = window.Symbol('map');
+let _map = '_map_';
 
 export default class ResultMap {
 	constructor(...args) {

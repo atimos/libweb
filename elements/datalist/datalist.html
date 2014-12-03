@@ -1,4 +1,9 @@
-<script src="./datalist.js"></script>
+<script>
+var document = window.document.currentScript.ownerDocument;
+require(['lib/libweb/elements/datalist/datalist'], function(datalist) {
+	new datalist.default(document);
+});
+</script>
 <template>
 	<option><span data-key="name|value"></span></option>
 </template>

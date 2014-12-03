@@ -1,6 +1,6 @@
 'use strict';
 
-let _store = window.Symbol('store'), get_db_instance;
+let _store = '_store_', get_db_instance;
 
 import ResultMap from '../common/resultmap';
 

@@ -5,7 +5,13 @@
 
 	var _data = '_datas', _config = '_configs', _elements = '_elementss';
 
-	var proto = Object.create(HTMLTableElement.prototype);
+	var proto = Object.create(HTMLTableElement.prototype),
+		tpl = {
+			header: document.querySelector('template:nth-of-type(2)'),
+			body: document.querySelector('template:nth-of-type(3)'),
+			footer: document.querySelector('template:nth-of-type(4)'),
+			pagination: document.querySelector('template:nth-of-type(5)')
+		};
 
 	Object.defineProperty(proto, _elements, {
 		writeable: false,
@@ -13,12 +19,6 @@
 		configurable: false,
 		value: {
 			search: document.querySelector('menu input'),
-			tpl: {
-				header: document.querySelector('template:nth-of-type(2)'),
-				body: document.querySelector('template:nth-of-type(3)'),
-				footer: document.querySelector('template:nth-of-type(4)'),
-				pagination: document.querySelector('template:nth-of-type(5)')
-			},
 			header: null,
 			body: null,
 			pagination: null,
