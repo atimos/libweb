@@ -1,7 +1,9 @@
 <script>
-var document = window.document.currentScript.ownerDocument;
-require(['lib/libweb/elements/datalist/datalist'], function(datalist) {
-	new datalist.default(document);
+'use strict';
+var import_document = window.document.currentScript.ownerDocument;
+var dir = import_document.documentURI.split('/').slice(3, -1).join('/');
+require([dir + '/datalist'], function(datalist) {
+	datalist.default(import_document);
 });
 </script>
 <template>
