@@ -17,7 +17,7 @@ class DataList extends window.HTMLDataListElement {
 
 		nodelist = window.document.createDocumentFragment();
 
-		if ( this.data.length === 0 ) {
+		if ( this.length === 0 ) {
 			this.classList.add('empty');
 		} else {
 			this.classList.remove('empty');
@@ -38,6 +38,14 @@ class DataList extends window.HTMLDataListElement {
 
 	get data() {
 		return this[_data].data;
+	}
+
+	set length(val) {
+		throw new Error('length is readonly');
+	}
+
+	get length() {
+		return this.data.length;
 	}
 
 	set target(node) {
@@ -106,8 +114,8 @@ function select_sibling(datalist, step) {
 
 	if ( pos < 0 ) {
 		pos = 0;
-	} else if ( pos >= datalist.data.length - 1 ) {
-		pos = datalist.data.length - 1 ;
+	} else if ( pos >= datalist.length - 1 ) {
+		pos = datalist.length - 1 ;
 	}
 
 	datalist[_data].selected = pos;
@@ -127,7 +135,25 @@ function render_selected(datalist) {
 function keydown_event(evt) {
 	let key = evt.keyCode;
 
-	if ( this.data.length > 0 ) {
+	if ( key === 13 ) {
+		evt.preventDefault();
+		let value = this.data[this[_data].selected];
+		this.data = [];
+
+		if ( value === undefined ) {
+			value = null;
+		}
+
+		this.dispatchEvent(new CustomEvent('select', {
+			detail: {
+				value: value,
+				target: this.target
+			},
+			bubbles: true,
+			cancelable: true
+		}));
+
+	} else if ( this.length > 0 ) {
 		if ( key === 27 ) {
 			this.data = [];
 			evt.preventDefault();
@@ -137,25 +163,6 @@ function keydown_event(evt) {
 		} else if ( key === 40 || ( key === 9 && !evt.shiftKey ) ) {
 			evt.preventDefault();
 			select_sibling(this, 1);
-		} else if ( key === 13 ) {
-			if ( this[_data].selected > -1 ) {
-				evt.preventDefault();
-
-				if ( this[_data].selected > -1 ) {
-					let value = this.data[this[_data].selected];
-
-					this.data = [];
-
-					this.dispatchEvent(new CustomEvent('select', {
-						detail: {
-							value: value,
-							target: this.target
-						},
-						bubbles: true,
-						cancelable: true
-					}));
-				}
-			}
 		}
 	}
 }
