@@ -69,8 +69,11 @@ class DataList extends window.HTMLDataListElement {
 	}
 
 	createdCallback() {
-		this[_data] = {};
-		this[_data].is_attached = false;
+		this[_data] = {
+			is_attached: false,
+			selected: -1
+		};
+
 		this.data = [];
 		this.target = window.document.querySelector(this.getAttribute('target'));
 
@@ -98,7 +101,8 @@ class DataList extends window.HTMLDataListElement {
 }
 
 function select_sibling(datalist, step) {
-	let pos = datalist[_data].selcted + step;
+
+	let pos = datalist[_data].selected + step;
 
 	if ( pos < 0 ) {
 		pos = 0;
@@ -112,7 +116,7 @@ function select_sibling(datalist, step) {
 
 function render_selected(datalist) {
 	Array.prototype.forEach.call(datalist.children, (node, index) => {
-		if ( index === this[_data].selected ) {
+		if ( index === datalist[_data].selected ) {
 			node.classList.add('selected');
 		} else {
 			node.classList.remove('selected');
@@ -134,13 +138,17 @@ function keydown_event(evt) {
 			evt.preventDefault();
 			select_sibling(this, 1);
 		} else if ( key === 13 ) {
-			if ( this[_data].selected >= 0 ) {
+			if ( this[_data].selected > -1 ) {
 				evt.preventDefault();
 
 				if ( this[_data].selected > -1 ) {
+					let value = this.data[this[_data].selected];
+
+					this.data = [];
+
 					this.dispatchEvent(new CustomEvent('select', {
 						detail: {
-							value: this.data[this[_data].selected],
+							value: value,
 							target: this.target
 						},
 						bubbles: true,
