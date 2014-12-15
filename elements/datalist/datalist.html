@@ -1,10 +1,5 @@
 <script>
-'use strict';
-var import_document = window.document.currentScript.ownerDocument;
-var dir = import_document.documentURI.split('/').slice(3, -1).join('/');
-require([dir + '/datalist'], function(datalist) {
-	datalist.default(import_document);
-});
+window.runtime.custom_element(window.document.currentScript.ownerDocument);
 </script>
 <template>
 	<option><span data-key="name|value"></span></option>
