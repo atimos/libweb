@@ -7,32 +7,37 @@ let instances = new Map();
 
 export function load(config) {
 	return load_db(config).then(db => {
-		return build_index(Transaction, db, config).then(index_map => {
-			return {
-				transaction: function(store_list, mode = 'readonly') {
-					return new Transaction(db, store_list, mode, index_map);
-				},
+		let db_obj, index_map;
 
-				store: function(name, mode) {
-					return {
-						add: (...args) => { return this.transaction([{name: name}], mode || 'readwrite').store(name).delete(...args); },
-						put: (...args) => { return this.transaction([{name: name}], mode || 'readwrite').store(name).put(...args); },
-						delete: (...args) => { return this.transaction([{name: name}], mode || 'readwrite').store(name).delete(...args); },
-						get: (...args) => { return this.transaction([{name: name}], mode || 'readonly').store(name).get(...args); },
-						range: (...args) => { return this.transaction([{name: name}], mode || 'readonly').store(name).range(...args); },
-						search: (...args) => { return this.transaction([{name: name}], mode || 'readonly').store(name).search(...args); }
-					};
-				},
+		db_obj = {
+			transaction: function(store_list, mode = 'readonly') {
+				return new Transaction(db, store_list, mode, index_map);
+			},
 
-				delete: function() {
-					return new Promise((resolve, reject) => {
-						let request = window.indexedDB.deleteDatabase(name);
+			store: function(name, mode) {
+				return {
+					add: (...args) => { return this.transaction([{name: name}], mode || 'readwrite').store(name).delete(...args); },
+					put: (...args) => { return this.transaction([{name: name}], mode || 'readwrite').store(name).put(...args); },
+					delete: (...args) => { return this.transaction([{name: name}], mode || 'readwrite').store(name).delete(...args); },
+					get: (...args) => { return this.transaction([{name: name}], mode || 'readonly').store(name).get(...args); },
+					range: (...args) => { return this.transaction([{name: name}], mode || 'readonly').store(name).range(...args); },
+					search: (...args) => { return this.transaction([{name: name}], mode || 'readonly').store(name).search(...args); }
+				};
+			},
 
-						request.addEventListener('success', resolve);
-						request.addEventListener('error', reject);
-					});
-				}
-			};
+			delete: function() {
+				return new Promise((resolve, reject) => {
+					let request = window.indexedDB.deleteDatabase(name);
+
+					request.addEventListener('success', resolve);
+					request.addEventListener('error', reject);
+				});
+			}
+		};
+
+		return build_index(db_obj, config.fulltext).then(new_index_map => {
+			index_map = new_index_map;
+			return db_obj;
 		});
 	});
 }
@@ -90,15 +95,15 @@ class Store {
 	}
 
 	add(...args) {
-		return update_store(this.store, 'add', ...args);
+		return update_store(this.store, this.index, 'add', ...args);
 	}
 
 	put(...args) {
-		return update_store(this.store, 'put', ...args);
+		return update_store(this.store, this.index, 'put', ...args);
 	}
 
 	delete(...args) {
-		return update_store(this.store, 'delete', ...args);
+		return update_store(this.store, this.index, 'delete', ...args);
 	}
 
 	search(query) {
@@ -212,7 +217,7 @@ class Range {
 	}
 }
 
-function update_store(store, type, data) {
+function update_store(store, index, action, data) {
 	return new Promise((resolve, reject) => {
 		let result = new ResultMap();
 
@@ -226,10 +231,15 @@ function update_store(store, type, data) {
 			resolve(result);
 		});
 
+
 		(Array.isArray(data)?data:[data]).forEach(item => {
-			let request = store[type](item);
+			let request = store[action](item);
 			request.addEventListener('success', evt => {
 				result.set(evt.target.result, item);
+
+				if ( index !== undefined ) {
+					index[action](item);
+				}
 			});
 		});
 	});

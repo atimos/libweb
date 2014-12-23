@@ -4,47 +4,49 @@ import '../lib/lunr.js/lunr.min';
 
 let lunr = $$$lib$lunr$js$lunr$min$$;
 
-export function build_index(Transaction, db, cfg) {
-	return new Promise(resolve => {
-		let store_name_list = [], transaction, count = 0;
+export function build_index(db, cfg) {
+	let index_map = new Map();
 
-		let index_map = cfg.stores.filter(store => {
-			if ( store.options.keyPath && Array.isArray(store.fulltext) ) {
-				store_name_list.push({name: store.name});
-				return true;
-			}
-		}).map(store => {
-			return {
-				name: store.name,
-				index: lunr(function () {
-					store.fulltext.forEach(name => {
-						this.field(name);
-					});
+	return Promise.all(cfg.map(store => {
+		return new Promise(resolve => {
+			let index = new Index(lunr(function () {
+				store.fields.forEach(name => {
+					this.field(name);
+				});
+				this.ref(store.ref);
+			}));
 
-					this.ref(store.options.keyPath);
-				})
-			};
-		}).reduce((index_map, index) => {
-			index_map.set(index.name, index.index);
-
-			return index_map;
-		}, new Map());
-
-		transaction = new Transaction(db, store_name_list);
-
-		for ( let entry of index_map.entries() ) {
-			count += 1;
-
-			transaction.store(entry[0]).range().cursor(cursor => {
-				entry[1].update(cursor.value);
+			return db.store(store.name).range().cursor(cursor => {
+				index.put(cursor.value);
 				cursor.continue();
 			}).then(() => {
-				count -= 1;
-
-				if ( count === 0 ) {
-					resolve(index_map);
-				}
+				index_map.set(store.name, index);
+				resolve();
 			});
-		}
+		});
+	})).then(() => {
+		return index_map;
 	});
+}
+
+class Index {
+	constructor(index) {
+		this.index = index;
+	}
+
+	put(item) {
+		return this.index.update(item);
+	}
+
+	add(item) {
+		return this.index.add(item);
+	}
+
+	delete(item) {
+		return this.index.remove(item);
+	}
+
+	search(query) {
+		return this.index.search(query);
+	}
 }
