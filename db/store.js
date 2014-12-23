@@ -1,216 +1,233 @@
 'use strict';
 
-let _store = '_store_', get_db_instance;
-
 import ResultMap from '../common/resultmap';
+import {build_index as build_index, search as fulltext_search} from './fulltext';
 
-export default function(config) {
-	return {
-		store: function(store_name) {
-			let store_list = [{name: store_name}];
+let instances = new Map();
 
+export function load(config) {
+	return load_db(config).then(db => {
+		return build_index(Transaction, db, config).then(index_map => {
 			return {
-				cursor: (...cursor_args) => {
+				transaction: function(store_list, mode = 'readonly') {
+					return new Transaction(db, store_list, mode, index_map);
+				},
+
+				store: function(name, mode) {
 					return {
-						count: (...count_args) => {
-							return this.transaction(store_list, 'readonly').then(req => {
-								return req[store_name].cursor(...cursor_args).count(...count_args);
-							});
-						},
-						entries: (...entries_args) => {
-							return this.transaction(store_list, 'readonly').then(req => {
-								return req[store_name].cursor(...cursor_args).entries(...entries_args);
-							});
-						}
+						add: (...args) => { return this.transaction([{name: name}], mode || 'readwrite').store(name).delete(...args); },
+						put: (...args) => { return this.transaction([{name: name}], mode || 'readwrite').store(name).put(...args); },
+						delete: (...args) => { return this.transaction([{name: name}], mode || 'readwrite').store(name).delete(...args); },
+						get: (...args) => { return this.transaction([{name: name}], mode || 'readonly').store(name).get(...args); },
+						range: (...args) => { return this.transaction([{name: name}], mode || 'readonly').store(name).range(...args); },
+						search: (...args) => { return this.transaction([{name: name}], mode || 'readonly').store(name).search(...args); }
 					};
 				},
 
-				get: (...args) => {
-					return this.transaction(store_list, 'readonly').then(req => {
-						return req[store_name].get(...args);
-					});
-				},
+				delete: function() {
+					return new Promise((resolve, reject) => {
+						let request = window.indexedDB.deleteDatabase(name);
 
-				add: (...args) => {
-					return this.transaction(store_list, 'readwrite').then(req => {
-						return req[store_name].add(...args);
+						request.addEventListener('success', resolve);
+						request.addEventListener('error', reject);
 					});
-				},
-
-				put: (...args) => {
-					return this.transaction(store_list, 'readwrite').then(req => {
-						return req[store_name].put(...args);
-					});
-				},
-
-				delete: (...args) => {
-					return this.transaction(store_list, 'readwrite').then(req => {
-						return req[store_name].delete(...args);
-					});
-				},
+				}
 			};
-		},
+		});
+	});
+}
 
-		transaction: function(store_list, mode = 'readonly') {
-			return get_db_instance(config).then(db => {
-				let transaction;
+class Transaction {
+	constructor(db, store_list, mode, index_map) {
+		this.store_map = new Map();
+		this.index_map = index_map || new Map();
 
-				transaction = db.transaction(store_list.map(store => {
-					return store.name;
-				}), mode);
+		this.transaction = db.transaction(store_list.map(store => {
+			this.store_map.set(store.name, store);
+			return store.name;
+		}), mode);
+	}
 
-				return store_list.reduce((store_list, store_config) => {
-					let store = transaction.objectStore(store_config.name);
-
-					if ( store_config.index ) {
-						store = store.index(store.index);
-					}
-
-					store_list[store.name] = new Store(store);
-
-					return store_list;
-				}, {});
-			});
-		},
-
-		reset: function() {
-			return new Promise((resolve, reject) => {
-				let request = window.indexedDB.deleteDatabase(config.name);
-
-				request.addEventListener('success', resolve);
-				request.addEventListener('error', reject);
-			});
+	store(name) {
+		if ( this.has(name) ) {
+			return new Store(this.transaction, this.store_map.get(name), this.index_map.get(name));
+		} else {
+			return false;
 		}
-	};
+	}
+
+	has(name) {
+		return this.store_map.has(name);
+	}
 }
 
 class Store {
-	constructor(store) {
-		this[_store] = store;
-	}
+	constructor(transaction, store, index) {
+		this.store = transaction.objectStore(store.name);
+		this.index = index;
 
-	cursor(type, ...args) {
-		let range;
-		switch ( type ) {
-			case 'only':
-				range = window.IDBKeyRange.only(args.shift());
-				break;
-			case 'lower':
-				range = window.IDBKeyRange.lowerBound(args.shift(), args.shift() || false);
-				break;
-			case 'upper':
-				range = window.IDBKeyRange.upperBound(args.shift(), args.shift() || false);
-				break;
-			case 'lowerupper':
-				range = window.IDBKeyRange.bound(args.shift(), args.shift(), args.shift() || false, args.shift() || false);
-				break;
+		if ( store.index ) {
+			this.store = this.store.index(store.index);
 		}
-		return {
-			entries: (...args) => {
-				return cursor_entries.call(this, range, ...args);
-			},
-			count: (...args) => {
-				return cursor_count.call(this, range, ...args);
-			}
-		};
 	}
 
 	get(id) {
 		return new Promise((resolve, reject) => {
-			this[_store].transaction.addEventListener('error', evt => {
+			this.store.transaction.addEventListener('error', evt => {
 				evt.preventDefault();
-				this[_store].transaction.abort();
+				this.store.transaction.abort();
 				reject(evt.target.error);
 			});
 
-			this[_store].get(id).addEventListener('success', evt => {
+			this.store.get(id).addEventListener('success', evt => {
 				resolve(evt.target.result);
 			});
 		});
 	}
 
+	range(type, ...args) {
+		return new Range(this.store, type, ...args);
+	}
+
 	add(...args) {
-		return update_store.call(this, 'add', ...args);
+		return update_store(this.store, 'add', ...args);
 	}
 
 	put(...args) {
-		return update_store.call(this, 'put', ...args);
+		return update_store(this.store, 'put', ...args);
 	}
 
 	delete(...args) {
-		return update_store.call(this, 'delete', ...args);
+		return update_store(this.store, 'delete', ...args);
+	}
+
+	search(query) {
+		return new Promise(resolve => {
+			let result = new ResultMap();
+
+			if ( this.index !== undefined ) {
+				let id_list = this.index.search(query).map(item => {
+					result.set(item.ref, {value: null, score: item.score});
+					return item.ref;
+				}).sort();
+
+				if ( id_list.length === 0 ) {
+					resolve(result);
+				} else {
+					this.range('lowerupper', id_list[0], id_list[id_list.length - 1]).cursor(cursor => {
+						id_list.shift();
+
+						result.set(cursor.primaryKey, {
+							value: cursor.value,
+							score: result.get(cursor.primaryKey).score
+						});
+
+						if ( id_list.length > 0 ) {
+							cursor.continue(id_list.shift());
+						}
+
+					}).then(() => {
+						resolve(result);
+					});
+				}
+			} else {
+				resolve(result);
+			}
+		});
 	}
 }
 
-get_db_instance = (function() {
-	let instance_map = new Map();
+class Range {
+	constructor(store, type, ...args) {
+		this.store = store;
+		switch ( type ) {
+			case 'only':
+				this.range = window.IDBKeyRange.only(args.shift());
+				break;
+			case 'lower':
+				this.range = window.IDBKeyRange.lowerBound(args.shift(), args.shift() || false);
+				break;
+			case 'upper':
+				this.range = window.IDBKeyRange.upperBound(args.shift(), args.shift() || false);
+				break;
+			case 'lowerupper':
+				this.range = window.IDBKeyRange.bound(args.shift(), args.shift(), args.shift() || false, args.shift() || false);
+				break;
+		}
+	}
 
-	return function(config) {
+	then(resolve, reject) {
+		return this.cursor().then(resolve, reject);
+	}
+
+	cursor(fn, direction = 'next') {
 		return new Promise((resolve, reject) => {
-			if ( instance_map.has(config.name) ) {
-				resolve(instance_map.get(config.name));
-			} else {
-				let request;
+			let result = new ResultMap(),
+				has_fn = ( Object.prototype.toString.call(fn) === '[object Function]' ? true : false );
 
-				if ( config.version !== undefined ) {
-					request = window.indexedDB.open(config.name, config.version);
+			this.store.transaction.addEventListener('error', evt => {
+				evt.preventDefault();
+				this.store.transaction.abort();
+				reject(evt.target.error);
+			});
+
+			this.store.transaction.addEventListener('complete', () => {
+				resolve(result);
+			});
+
+			this.store.openCursor(this.range, direction).addEventListener('success', evt => {
+				let cursor = evt.target.result;
+
+				if ( cursor === null || cursor === undefined ) {
+					return cursor;
 				} else {
-					request = window.indexedDB.open(config.name);
-				}
-
-				request.addEventListener('upgradeneeded', evt => {
-					let db = evt.target.result;
-
-					config.stores.forEach(store => {
-						let object_store;
-
-						if(db.objectStoreNames.contains(store.name)) {
-							if ( store.options !== undefined ) {
-								db.deleteObjectStore(store.name);
-								object_store = db.createObjectStore(store.name, store.options);
-							}
+					if ( cursor.primaryKey !== undefined ) {
+						if ( has_fn === true ) {
+							fn(cursor, result);
 						} else {
-							object_store = db.createObjectStore(store.name, store.options);
+							result.set(cursor.primaryKey, cursor.value);
+							cursor.continue();
 						}
-
-						if ( store.index ) {
-							store.index.forEach(index => {
-								object_store.createIndex(index.name, index.keyPath || index.name, {unique: index.unique});
-							});
-						}
-					});
-				});
-
-				request.addEventListener('success', evt => {
-					instance_map.set(config.name, evt.target.result);
-					resolve(instance_map.get(config.name));
-				});
-
-				request.addEventListener('error', evt => {
-					evt.preventDefault();
-					reject(evt.target.error);
-				});
-			}
+					} else {
+						cursor.continue();
+					}
+				}
+			});
 		});
-	};
-}());
+	}
 
-function update_store(type, data) {
+	count() {
+		return new Promise((resolve, reject) => {
+
+			this.store.transaction.addEventListener('error', evt => {
+				evt.preventDefault();
+				this.store.transaction.abort();
+				reject(evt.target.error);
+			});
+
+			this.store.count(this.range).addEventListener('success', function() {
+				resolve(this.result);
+			});
+		});
+	}
+}
+
+function update_store(store, type, data) {
 	return new Promise((resolve, reject) => {
 		let result = new ResultMap();
 
-		this[_store].transaction.addEventListener('error', evt => {
+		store.transaction.addEventListener('error', evt => {
 			evt.preventDefault();
-			this[_store].transaction.abort();
+			store.transaction.abort();
 			reject(evt.target.error);
 		});
 
-		this[_store].transaction.addEventListener('complete', () => {
+		store.transaction.addEventListener('complete', () => {
 			resolve(result);
 		});
 
 		(Array.isArray(data)?data:[data]).forEach(item => {
-			let request = this[_store][type](item);
+			let request = store[type](item);
 			request.addEventListener('success', evt => {
 				result.set(evt.target.result, item);
 			});
@@ -218,51 +235,51 @@ function update_store(type, data) {
 	});
 }
 
-function cursor_entries(range, fn, direction = 'next') {
+function load_db(config) {
 	return new Promise((resolve, reject) => {
-		let result = new ResultMap(),
-			callback = (Object.prototype.toString.call(fn)==='[object Function]'?true:false);
+		if ( instances.has(config.name) ) {
+			resolve(instances.get(config.name));
+		} else {
+			let request;
 
-		this[_store].transaction.addEventListener('error', evt => {
-			evt.preventDefault();
-			this[_store].transaction.abort();
-			reject(evt.target.error);
-		});
-
-		this[_store].transaction.addEventListener('complete', () => {
-			resolve(result);
-		});
-
-		this[_store].openCursor(range, direction).addEventListener('success', evt => {
-			let cursor = evt.target.result;
-
-			if ( cursor === null || cursor === undefined ) {
-				return cursor;
+			if ( config.version !== undefined ) {
+				request = window.indexedDB.open(config.name, config.version);
 			} else {
-				if ( callback === true ) {
-					fn(cursor, result);
-				} else {
-					if ( cursor.primaryKey !== undefined ) {
-						result.set(cursor.primaryKey, cursor.value);
-					}
-					cursor.continue();
-				}
+				request = window.indexedDB.open(config.name);
 			}
-		});
-	});
-}
 
-function cursor_count(range) {
-	return new Promise((resolve, reject) => {
+			request.addEventListener('upgradeneeded', evt => {
+				let db = evt.target.result;
 
-		this[_store].transaction.addEventListener('error', evt => {
-			evt.preventDefault();
-			this[_store].transaction.abort();
-			reject(evt.target.error);
-		});
+				config.stores.forEach(store => {
+					let object_store;
 
-		this[_store].count(range).addEventListener('success', function() {
-			resolve(this.result);
-		});
+					if(db.objectStoreNames.contains(store.name)) {
+						if ( store.options !== undefined ) {
+							db.deleteObjectStore(store.name);
+							object_store = db.createObjectStore(store.name, store.options);
+						}
+					} else {
+						object_store = db.createObjectStore(store.name, store.options);
+					}
+
+					if ( store.index ) {
+						store.index.forEach(index => {
+							object_store.createIndex(index.name, index.keyPath || index.name, {unique: index.unique});
+						});
+					}
+				});
+			});
+
+			request.addEventListener('success', evt => {
+				instances.set(config.name, evt.target.result);
+				resolve(instances.get(config.name));
+			});
+
+			request.addEventListener('error', evt => {
+				evt.preventDefault();
+				reject(evt.target.error);
+			});
+		}
 	});
 }

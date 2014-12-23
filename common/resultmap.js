@@ -18,6 +18,42 @@ export default class ResultMap {
 	set(...args) { return this[_map].set(...args); }
 	values(...args) { return this[_map].values(...args); }
 
+	key(pos) {
+		let index = 0;
+
+		for ( let key of this[_map].keys() ) {
+			if ( pos === index ) {
+				return key;
+			}
+
+			index += 1;
+		}
+	}
+
+	value(pos) {
+		let index = 0;
+
+		for ( let value of this[_map].values() ) {
+			if ( pos === index ) {
+				return value;
+			}
+
+			index += 1;
+		}
+	}
+
+	entry(pos) {
+		let index = 0;
+
+		for ( let entry of this[_map].entries() ) {
+			if ( pos === index ) {
+				return entry;
+			}
+
+			index += 1;
+		}
+	}
+
 	map(cb) {
 		let result = new ResultMap();
 
