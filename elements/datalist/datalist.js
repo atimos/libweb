@@ -6,46 +6,49 @@ let _hdata = '_data_', _document = '_document_';
 
 class DataList extends window.HTMLDataListElement {
 	set options(options) {
-		let nodelist, tpl, value_key;
-
 		if ( Array.isArray(options) !== true ) {
-			throw new Error('options has to be an array');
+			throw new Error('options has to be an Array');
 		}
 
 		this[_hdata].options = options;
 		this[_hdata].focused = -1;
 
+		if ( options.length === 0 ) {
+			this.hidden = true;
 
-		if ( this.length === 0 ) {
-			this.classList.add('empty');
+			Array.prototype.forEach.call(this.querySelectorAll('tt-datalist > *:not(template'), node => {
+				this.removeChild(node);
+			});
 		} else {
-			this.classList.remove('empty');
+			let nodelist, tpl, value_key;
+
+			nodelist = window.document.createDocumentFragment();
+
+			tpl = document.createElement('option');
+			tpl.appendChild(this[_hdata].tpl.content.cloneNode(true));
+			value_key = this[_hdata].tpl.dataset.value;
+
+			this.options.forEach(item => {
+				let node = tpl.cloneNode(true);
+
+				if ( value_key !== undefined ) {
+					node.value = item[value_key];
+				} else if ( item.value !== undefined ) {
+					node.value = item.value;
+				}
+
+				nodelist.appendChild(render_item(node, item));
+			});
+
+			Array.prototype.forEach.call(this.querySelectorAll('tt-datalist > *:not(template'), node => {
+				this.removeChild(node);
+			});
+
+			this.appendChild(nodelist);
+
+			this.hidden = false;
 		}
 
-		nodelist = window.document.createDocumentFragment();
-
-		tpl = document.createElement('option');
-		tpl.appendChild(this[_hdata].tpl.content.cloneNode(true));
-		value_key = this[_hdata].tpl.dataset.value;
-
-		this.options.forEach(item => {
-			let node = tpl.cloneNode(true);
-
-			if ( value_key !== undefined ) {
-				node.value = item[value_key];
-			} else if ( item.value !== undefined ) {
-				node.value = item.value;
-			}
-
-			nodelist.appendChild(render_item(node, item));
-		});
-
-		Array.prototype.forEach.call(this.querySelectorAll('tt-datalist > *:not(template'), node => {
-			this.removeChild(node);
-		});
-
-		this.appendChild(nodelist);
-		this.hidden = false;
 	}
 
 	get options() {
@@ -70,6 +73,7 @@ class DataList extends window.HTMLDataListElement {
 		return this[_hdata].value;
 	}
 
+	//TODO: change style to class when using shadow dom
 	set hidden(val) {
 		if ( val === true ) {
 			this.style.display = 'none';
