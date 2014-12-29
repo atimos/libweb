@@ -1,21 +1,20 @@
 'use strict';
 
-import {list_item as render_list_item} from '../../common/renderer';
+import {item as render_item} from '../../common/renderer';
 
-let _data = '_data_', _document = '_document_';
-
+let _hdata = '_data_', _document = '_document_';
 
 class DataList extends window.HTMLDataListElement {
-	set data(value) {
-		let nodelist;
-		if ( Array.isArray(value) !== true ) {
-			throw new Error('data has to be an array');
+	set options(options) {
+		let nodelist, tpl, value_key;
+
+		if ( Array.isArray(options) !== true ) {
+			throw new Error('options has to be an array');
 		}
 
-		this[_data].data = value;
-		this[_data].selected = -1;
+		this[_hdata].options = options;
+		this[_hdata].focused = -1;
 
-		nodelist = window.document.createDocumentFragment();
 
 		if ( this.length === 0 ) {
 			this.classList.add('empty');
@@ -23,21 +22,64 @@ class DataList extends window.HTMLDataListElement {
 			this.classList.remove('empty');
 		}
 
-		if ( this[_data].is_attached === true ) {
-			this.data.forEach(item => {
-				nodelist.appendChild(render_list_item(this[_data].tpl, item));
-			});
+		nodelist = window.document.createDocumentFragment();
 
-			Array.prototype.forEach.call(this.querySelectorAll('tt-datalist > *:not(template'), node => {
-				this.removeChild(node);
-			});
+		tpl = document.createElement('option');
+		tpl.appendChild(this[_hdata].tpl.content.cloneNode(true));
+		value_key = this[_hdata].tpl.dataset.value;
 
-			this.appendChild(nodelist);
+		this.options.forEach(item => {
+			let node = tpl.cloneNode(true);
+
+			if ( value_key !== undefined ) {
+				node.value = item[value_key];
+			} else if ( item.value !== undefined ) {
+				node.value = item.value;
+			}
+
+			nodelist.appendChild(render_item(node, item));
+		});
+
+		Array.prototype.forEach.call(this.querySelectorAll('tt-datalist > *:not(template'), node => {
+			this.removeChild(node);
+		});
+
+		this.appendChild(nodelist);
+		this.hidden = false;
+	}
+
+	get options() {
+		return this[_hdata].options;
+	}
+
+	set value(value) {
+		this[_hdata].value = value;
+
+		this[_hdata].focused = Array.prototype.reduce.call(this.querySelectorAll('tt-datalist > *:not(template'), (focused, node, index) => {
+			if ( value === node.value ) {
+				return index;
+			} else {
+				return focused;
+			}
+		}, -1);
+		
+		render_focused(this);
+	}
+
+	get value() {
+		return this[_hdata].value;
+	}
+
+	set hidden(val) {
+		if ( val === true ) {
+			this.style.display = 'none';
+		} else if ( val === false ) {
+			this.style.display = '';
 		}
 	}
 
-	get data() {
-		return this[_data].data;
+	get hidden() {
+		return (this.style.display === 'none');
 	}
 
 	set length(val) {
@@ -45,72 +87,51 @@ class DataList extends window.HTMLDataListElement {
 	}
 
 	get length() {
-		return this.data.length;
+		return this.options.length;
 	}
 
-	set target(node) {
-		this[_data].target = node;
+	next() {
+		focus_sibling(this, 1);
 	}
 
-	get target() {
-		return this[_data].target;
+	previous() {
+		focus_sibling(this, -1);
 	}
 
-	set value(value) {
-		this[_data].selected = Array.prototype.reduce.call(this.querySelectorAll('tt-datalist > *:not(template'), (index, node, node_index) => {
-			if ( value === node.value ) {
-				return node_index;
-			} else {
-				return index;
-			}
-		}, -1);
-
-		render_selected(this);
-	}
-
-	get value() {
-		if ( this[_data].selected === -1 ) {
-			return '';
+	select(index) {
+		if ( index !== undefined ) {
+			this.value = this.options[index];
 		} else {
-			return this.data[this[_data].selected];
+			this.value = this.options[this[_hdata].focused];
 		}
+
+		this.hidden = true;
+		return this.value;
 	}
 
 	createdCallback() {
-		this[_data] = {
+		this[_hdata] = {
 			is_attached: false,
-			selected: -1
+			options: [],
+			focused: -1
 		};
 
-		this.data = [];
-		this.target = window.document.querySelector(this.getAttribute('target'));
+		this.hidden = true;
 
-		this[_data].tpl = this.querySelector('template');
-		if ( !this[_data].tpl ) {
-			this[_data].tpl = this[_document].querySelector('template');
+		this[_hdata].tpl = this.querySelector('template');
+
+		if ( !this[_hdata].tpl ) {
+			this[_hdata].tpl = this[_document].querySelector('template');
 		}
 	}
 
 	attachedCallback() {
-		this[_data].is_attached = true;
-		this.data = this.data;
-		this.target.addEventListener('keydown', keydown_event.bind(this));
-	}
-
-	detachedCallback() {
-		this.target.removeEventListener('keydown', keydown_event.bind(this));
-	}
-
-	attributeChangedCallback(name, oldval, newval) {
-		if ( name === 'target' ) {
-			this.target = window.document.querySelector(newval);
-		}
+		this[_hdata].is_attached = true;
 	}
 }
 
-function select_sibling(datalist, step) {
-
-	let pos = datalist[_data].selected + step;
+function focus_sibling(datalist, step) {
+	let pos = datalist[_hdata].focused + step;
 
 	if ( pos < 0 ) {
 		pos = 0;
@@ -118,53 +139,18 @@ function select_sibling(datalist, step) {
 		pos = datalist.length - 1 ;
 	}
 
-	datalist[_data].selected = pos;
-	render_selected(datalist);
+	datalist[_hdata].focused = pos;
+	render_focused(datalist);
 }
 
-function render_selected(datalist) {
-	Array.prototype.forEach.call(datalist.children, (node, index) => {
-		if ( index === datalist[_data].selected ) {
-			node.classList.add('selected');
+function render_focused(datalist) {
+	Array.prototype.forEach.call(datalist.querySelectorAll('tt-datalist > *:not(template'), (node, index) => {
+		if ( index === datalist[_hdata].focused ) {
+			node.classList.add('focused');
 		} else {
-			node.classList.remove('selected');
+			node.classList.remove('focused');
 		}
 	});
-}
-
-function keydown_event(evt) {
-	let key = evt.keyCode;
-
-	if ( key === 13 ) {
-		evt.preventDefault();
-		let value = this.data[this[_data].selected];
-		this.data = [];
-
-		if ( value === undefined ) {
-			value = null;
-		}
-
-		this.dispatchEvent(new CustomEvent('select', {
-			detail: {
-				value: value,
-				target: this.target
-			},
-			bubbles: true,
-			cancelable: true
-		}));
-
-	} else if ( this.length > 0 ) {
-		if ( key === 27 ) {
-			this.data = [];
-			evt.preventDefault();
-		} else if ( key === 38 || ( key === 9 && evt.shiftKey ) ) {
-			evt.preventDefault();
-			select_sibling(this, -1);
-		} else if ( key === 40 || ( key === 9 && !evt.shiftKey ) ) {
-			evt.preventDefault();
-			select_sibling(this, 1);
-		}
-	}
 }
 
 export default function(document) {
