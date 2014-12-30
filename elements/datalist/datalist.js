@@ -17,7 +17,7 @@ class DataList extends window.HTMLDataListElement {
 		if ( options.length === 0 ) {
 			this.hidden = true;
 
-			Array.prototype.forEach.call(this.querySelectorAll('tt-datalist > *:not(template'), node => {
+			Array.prototype.forEach.call(this.querySelectorAll('lw-datalist > *:not(template'), node => {
 				this.removeChild(node);
 			});
 		} else {
@@ -36,7 +36,7 @@ class DataList extends window.HTMLDataListElement {
 				nodelist.appendChild(render_item(tpl.node.cloneNode(true), option.value));
 			});
 
-			Array.prototype.forEach.call(this.querySelectorAll('tt-datalist > *:not(template'), node => {
+			Array.prototype.forEach.call(this.querySelectorAll('lw-datalist > *:not(template'), node => {
 				this.removeChild(node);
 			});
 
@@ -54,7 +54,7 @@ class DataList extends window.HTMLDataListElement {
 	set value(value) {
 		this[_hdata].value = value;
 
-		this[_hdata].focused = Array.prototype.reduce.call(this.querySelectorAll('tt-datalist > *:not(template'), (focused, node, index) => {
+		this[_hdata].focused = Array.prototype.reduce.call(this.querySelectorAll('lw-datalist > *:not(template'), (focused, node, index) => {
 			if ( value === node.value ) {
 				return index;
 			} else {
@@ -137,7 +137,7 @@ function focus_sibling(datalist, step) {
 }
 
 function render_focused(datalist) {
-	Array.prototype.forEach.call(datalist.querySelectorAll('tt-datalist > *:not(template'), (node, index) => {
+	Array.prototype.forEach.call(datalist.querySelectorAll('lw-datalist > *:not(template'), (node, index) => {
 		if ( index === datalist[_hdata].focused ) {
 			node.classList.add('focused');
 		} else {
@@ -147,7 +147,7 @@ function render_focused(datalist) {
 }
 
 function get_templates(datalist) {
-	let tpl_list = Array.prototype.slice.call(datalist.querySelectorAll('tt-datalist > template'), 0);
+	let tpl_list = Array.prototype.slice.call(datalist.querySelectorAll('lw-datalist > template'), 0);
 	
 	if ( tpl_list.length === 0 ) {
 		tpl_list = [datalist[_document].querySelector('template')];
@@ -171,5 +171,5 @@ function get_templates(datalist) {
 
 export default function(document) {
 	DataList.prototype[_document] = document;
-	window.document.registerElement('tt-datalist', {prototype: DataList.prototype});
+	window.document.registerElement('lw-datalist', {prototype: DataList.prototype});
 }
