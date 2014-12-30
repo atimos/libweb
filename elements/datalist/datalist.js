@@ -1,7 +1,7 @@
 'use strict';
 
 import {item as render_item} from '../../common/renderer';
-import ResultMap from '../../common/resultmap';
+import SuperMap from '../../common/supermap';
 
 let _hdata = '_data_', _document = '_document_';
 
@@ -104,9 +104,7 @@ class DataList extends window.HTMLDataListElement {
 		} else {
 			this.value = this.options[this[_hdata].focused].value;
 		}
-
 		this.hidden = true;
-		return this.value;
 	}
 
 	createdCallback() {
@@ -168,7 +166,7 @@ function get_templates(datalist) {
 	}).reduce((map, tpl) => {
 		map.set(tpl.name, tpl);
 		return map;
-	}, new ResultMap());
+	}, new SuperMap());
 }
 
 export default function(document) {

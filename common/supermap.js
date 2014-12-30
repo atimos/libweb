@@ -2,7 +2,7 @@
 
 let _map = '_map_';
 
-export default class ResultMap {
+export default class SuperMap {
 	constructor(...args) {
 		this[_map] = new window.Map(...args);
 	}
@@ -55,7 +55,7 @@ export default class ResultMap {
 	}
 
 	map(cb) {
-		let result = new ResultMap();
+		let result = new SuperMap();
 
 		this[_map].forEach(function(...args) {
 			result.set(args[1], cb(...args));
@@ -87,7 +87,7 @@ export default class ResultMap {
 	}
 
 	filter(cb) {
-		let result = new ResultMap();
+		let result = new SuperMap();
 
 		this[_map].forEach(function(...args) {
 			if (cb(...args)) {

@@ -1,6 +1,6 @@
 'use strict';
 
-import ResultMap from '../common/resultmap';
+import SuperMap from '../common/supermap';
 import {build_index as build_index} from './fulltext';
 
 let instance_map = new Map(),
@@ -136,7 +136,7 @@ class Store {
 
 	search(query) {
 		return new Promise(resolve => {
-			let result = new ResultMap();
+			let result = new SuperMap();
 
 			if ( this.index !== undefined ) {
 				let id_list = this.index.search(query).map(item => {
@@ -198,7 +198,7 @@ class Range {
 
 	cursor(fn, direction = 'next') {
 		return new Promise((resolve, reject) => {
-			let result = new ResultMap(),
+			let result = new SuperMap(),
 				has_fn = ( Object.prototype.toString.call(fn) === '[object Function]' ? true : false );
 
 			this.store.transaction.addEventListener('error', evt => {
@@ -250,7 +250,7 @@ class Range {
 
 function update_store(store, index, action, data) {
 	return new Promise((resolve, reject) => {
-		let result = new ResultMap();
+		let result = new SuperMap();
 
 		store.transaction.addEventListener('error', evt => {
 			evt.preventDefault();
