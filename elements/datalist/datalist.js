@@ -1,6 +1,7 @@
 'use strict';
 
 import {item as render_item} from '../../common/renderer';
+import ResultMap from '../../common/resultmap';
 
 let _hdata = '_data_', _document = '_document_';
 
@@ -20,24 +21,19 @@ class DataList extends window.HTMLDataListElement {
 				this.removeChild(node);
 			});
 		} else {
-			let nodelist, tpl, value_key;
+			let nodelist = window.document.createDocumentFragment(),
+				tpl_list = get_templates(this);
 
-			nodelist = window.document.createDocumentFragment();
+			this.options.forEach(option => {
+				let tpl;
 
-			tpl = document.createElement('option');
-			tpl.appendChild(this[_hdata].tpl.content.cloneNode(true));
-			value_key = this[_hdata].tpl.dataset.value;
-
-			this.options.forEach(item => {
-				let node = tpl.cloneNode(true);
-
-				if ( value_key !== undefined ) {
-					node.value = item[value_key];
-				} else if ( item.value !== undefined ) {
-					node.value = item.value;
+				if ( option.template !== undefined && tpl_list.has(option.template) ) {
+					tpl = tpl_list.get(option.template);
+				} else {
+					tpl = tpl_list.value(0);
 				}
 
-				nodelist.appendChild(render_item(node, item));
+				nodelist.appendChild(render_item(tpl.node.cloneNode(true), option.value));
 			});
 
 			Array.prototype.forEach.call(this.querySelectorAll('tt-datalist > *:not(template'), node => {
@@ -104,9 +100,9 @@ class DataList extends window.HTMLDataListElement {
 
 	select(index) {
 		if ( index !== undefined ) {
-			this.value = this.options[index];
+			this.value = this.options[index].value;
 		} else {
-			this.value = this.options[this[_hdata].focused];
+			this.value = this.options[this[_hdata].focused].value;
 		}
 
 		this.hidden = true;
@@ -122,11 +118,6 @@ class DataList extends window.HTMLDataListElement {
 
 		this.hidden = true;
 
-		this[_hdata].tpl = this.querySelector('template');
-
-		if ( !this[_hdata].tpl ) {
-			this[_hdata].tpl = this[_document].querySelector('template');
-		}
 	}
 
 	attachedCallback() {
@@ -155,6 +146,29 @@ function render_focused(datalist) {
 			node.classList.remove('focused');
 		}
 	});
+}
+
+function get_templates(datalist) {
+	let tpl_list = Array.prototype.slice.call(datalist.querySelectorAll('tt-datalist > template'), 0);
+	
+	if ( tpl_list.length === 0 ) {
+		tpl_list = [datalist[_document].querySelector('template')];
+	}
+
+	return tpl_list.map(tpl => {
+		let node = document.createElement('option');
+
+		node.appendChild(tpl.content.cloneNode(true));
+		node.className = tpl.className;
+
+		return {
+			name: tpl.dataset.name,
+			node: node
+		};
+	}).reduce((map, tpl) => {
+		map.set(tpl.name, tpl);
+		return map;
+	}, new ResultMap());
 }
 
 export default function(document) {
