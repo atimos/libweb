@@ -101,8 +101,10 @@ class DataList extends window.HTMLDataListElement {
 	select(index) {
 		if ( index !== undefined ) {
 			this.value = this.options[index].value;
-		} else {
+		} else if ( this.options[this[_hdata].focused] !== undefined ) {
 			this.value = this.options[this[_hdata].focused].value;
+		} else {
+			this.value = undefined;
 		}
 		this.hidden = true;
 	}
