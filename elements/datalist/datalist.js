@@ -1,177 +1,98 @@
 'use strict';
 
-import {item as render_item} from '../../common/renderer';
-import SuperMap from '../../common/supermap';
+import {array as dom_array} from '../../dom/collection';
+import {item as render_item} from '../../dom/render';
 
-let _hdata = '_data_', _document = '_document_';
+let _opt = Symbol('options'),
+	_pos = Symbol('position'),
+	self_document = window.document.currentScript.ownerDocument;
 
 class DataList extends window.HTMLDataListElement {
 	set options(options) {
 		if ( Array.isArray(options) !== true ) {
 			throw new Error('options has to be an Array');
 		}
-
-		this[_hdata].options = options;
-		this[_hdata].focused = -1;
-
-		if ( options.length === 0 ) {
-			this.hidden = true;
-
-			Array.prototype.forEach.call(this.querySelectorAll('lw-datalist > *:not(template'), node => {
-				this.removeChild(node);
-			});
-		} else {
-			let nodelist = window.document.createDocumentFragment(),
-				tpl_list = get_templates(this);
-
-			this.options.forEach(option => {
-				let tpl;
-
-				if ( option.template !== undefined && tpl_list.has(option.template) ) {
-					tpl = tpl_list.get(option.template);
-				} else {
-					tpl = tpl_list.value(0);
-				}
-
-				nodelist.appendChild(render_item(tpl.node.cloneNode(true), option.value));
-			});
-
-			Array.prototype.forEach.call(this.querySelectorAll('lw-datalist > *:not(template'), node => {
-				this.removeChild(node);
-			});
-
-			this.appendChild(nodelist);
-
-			this.hidden = false;
-		}
-
+		this[_opt] = options;
+		this[_pos] = -1;
+		render(this);
 	}
 
 	get options() {
-		return this[_hdata].options;
-	}
-
-	set value(value) {
-		this[_hdata].value = value;
-
-		this[_hdata].focused = Array.prototype.reduce.call(this.querySelectorAll('lw-datalist > *:not(template'), (focused, node, index) => {
-			if ( value === node.value ) {
-				return index;
-			} else {
-				return focused;
-			}
-		}, -1);
-		
-		render_focused(this);
+		return this[_opt];
 	}
 
 	get value() {
-		return this[_hdata].value;
-	}
-
-	//TODO: change style to class when using shadow dom
-	set hidden(val) {
-		if ( val === true ) {
-			this.style.display = 'none';
-		} else if ( val === false ) {
-			this.style.display = '';
-		}
-	}
-
-	get hidden() {
-		return (this.style.display === 'none');
-	}
-
-	set length(val) {
-		throw new Error('length is readonly');
-	}
-
-	get length() {
-		return this.options.length;
-	}
-
-	next() {
-		focus_sibling(this, 1);
-	}
-
-	previous() {
-		focus_sibling(this, -1);
-	}
-
-	select(index) {
-		if ( index !== undefined ) {
-			this.value = this.options[index].value;
-		} else if ( this.options[this[_hdata].focused] !== undefined ) {
-			this.value = this.options[this[_hdata].focused].value;
-		} else {
-			this.value = undefined;
-		}
-		this.hidden = true;
+		return this.options[this[_pos]];
 	}
 
 	createdCallback() {
-		this[_hdata] = {
-			is_attached: false,
-			options: [],
-			focused: -1
-		};
-
-		this.hidden = true;
-
+		this[_pos] = -1;
+		this[_opt] = [];
+		this.addEventListener('keydown', keydown_event.bind(this));
 	}
 
 	attachedCallback() {
-		this[_hdata].is_attached = true;
+		render(this);
 	}
 }
 
-function focus_sibling(datalist, step) {
-	let pos = datalist[_hdata].focused + step;
+function keydown_event(evt) {
+	let key = evt.keyCode, dl = evt.target, pos = dl[_pos];
 
-	if ( pos < 0 ) {
-		pos = 0;
-	} else if ( pos >= datalist.length - 1 ) {
-		pos = datalist.length - 1 ;
+	if ( key === 40 || ( key === 9 && !evt.shiftKey ) ) {
+		pos += 1;
+	} else if ( key === 38 || ( key === 9 && evt.shiftKey ) ) {
+		pos -= 1;
+	} else if ( key === 27 ) {
+		dl.options = [];
+	} else if ( key === 13 && dl.value !== undefined ) {
+		dl.dispatchEvent(new CustomEvent('select', {detail:dl.value}));
+		dl.options = [];
 	}
 
-	datalist[_hdata].focused = pos;
-	render_focused(datalist);
+	if ( pos > -1 && pos < dl.options.length ) {
+		dl[_pos] = pos;
+		select_element(dl);
+	}
 }
 
-function render_focused(datalist) {
-	Array.prototype.forEach.call(datalist.querySelectorAll('lw-datalist > *:not(template'), (node, index) => {
-		if ( index === datalist[_hdata].focused ) {
-			node.classList.add('focused');
-		} else {
-			node.classList.remove('focused');
-		}
-	});
-}
+function render(dl) {
+	let node_list,
+		option = document.createElement('option'),
+		template = dl.querySelector(':scope > template');
 
-function get_templates(datalist) {
-	let tpl_list = Array.prototype.slice.call(datalist.querySelectorAll('lw-datalist > template'), 0);
-	
-	if ( tpl_list.length === 0 ) {
-		tpl_list = [datalist[_document].querySelector('template')];
+	if ( template === undefined ) {
+		template = self_document.querySelector(':scope > template');
 	}
 
-	return tpl_list.map(tpl => {
-		let node = document.createElement('option');
+	option.appendChild(template.content.cloneNode(true));
 
-		node.appendChild(tpl.content.cloneNode(true));
-		node.className = tpl.className;
+	node_list = dl.options
+		.map(item => {
+			return render_item(option.cloneNode(true), item);
+		})
+		.reduce((node_list, node) => {
+			node_list.appendChild(node);
+			return node_list;
+		}, document.createDocumentFragment());
 
-		return {
-			name: tpl.dataset.name,
-			node: node
-		};
-	}).reduce((map, tpl) => {
-		map.set(tpl.name, tpl);
-		return map;
-	}, new SuperMap());
+	dom_array(':scope > *:not(template)', dl)
+		.forEach(node => {
+			node.parentNode.removeChild(node);
+		});
+
+	dl.appendChild(node_list);
 }
 
-export default function(document) {
-	DataList.prototype[_document] = document;
-	window.document.registerElement('lw-datalist', {prototype: DataList.prototype});
+function select_element(dl) {
+	dom_array(':scope > *:not(template)', dl)
+		.forEach((node, index) => {
+			if ( index === dl[_pos] ) {
+				node.classList.add('selected');
+			} else {
+				node.classList.remove('selected');
+			}
+		});
 }
+
+window.document.registerElement('lw-datalist', {prototype: DataList.prototype});
