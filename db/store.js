@@ -79,10 +79,11 @@ class Store {
 							.range('lowerupper', key_list[0], key_list[key_list.length -1])
 							.cursor((cursor, result) => {
 								if ( cursor !== null ) {
-									let next_key = key_list.shift();
+									let next_key = key_list.shift(),
+										item = result.get(cursor.key);
 
-									if ( result.has(cursor.key) ) {
-										result.set(cursor.key, cursor.value);
+									if ( item !== undefined ) {
+										result.set(cursor.key, {score: item, value: cursor.value});
 									}
 
 									if ( next_key !== undefined ) {
@@ -90,14 +91,12 @@ class Store {
 									}
 
 								}
-							}, result.map(() => {
-								return null;
-							}));
+							}, result);
 					});
 			})
 			.then(result => {
 				return result.filter(item => {
-					return item !== null;
+					return item.value !== undefined;
 				});
 			});
 	}
