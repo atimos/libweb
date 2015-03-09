@@ -13,8 +13,9 @@ class DataList extends window.HTMLDataListElement {
 			throw new Error('options has to be an Array');
 		}
 		this[_opt] = options;
-		this[_pos] = -1;
+		this[_pos] = 0;
 		render(this);
+		select_element(this);
 	}
 
 	get options() {
