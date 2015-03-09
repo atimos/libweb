@@ -124,10 +124,17 @@ class Store {
 			});
 	}
 
+	count(...args) {
+		return this.get_db_transaction()
+			.then(store => {
+				return store.range().count(...args);
+			});
+	}
+
 	get(...args) {
 		return this.get_db_transaction()
 			.then(store => {
-				store.get(...args);
+				return store.get(...args);
 			});
 	}
 
