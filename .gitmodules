@@ -2,3 +2,7 @@
 	path = lib/hammer.js
 	url = https://github.com/hammerjs/hammer.js.git
 	branch = master
+[submodule "lib/lunr.js"]
+	path = lib/lunr.js
+	url = https://github.com/olivernn/lunr.js.git
+	branch = master
