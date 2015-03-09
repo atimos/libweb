@@ -79,7 +79,25 @@ export function load_indexeddb(name, version) {
 				});
 
 				request.addEventListener('success', evt => {
-					resolve(db(evt.target.result));
+					resolve(function(store_list, mode = 'readonly') {
+						return new Promise(resolve => {
+							resolve(Array.isArray(store_list)?store_list:[store_list]);
+						})
+							.then(store_list => {
+								let transaction = evt.target.result.transaction(store_list, mode);
+
+								store_list = store_list.map(name => {
+									return new Store(transaction, name);
+								});
+
+								if ( store_list.length === 1 ) {
+									return store_list[0];
+								} else {
+									return store_list;
+								}
+							});
+					});
+
 				});
 
 				request.addEventListener('error', evt => {
@@ -88,27 +106,6 @@ export function load_indexeddb(name, version) {
 				});
 			}).then(resolve, reject);
 		}
-	};
-}
-
-function db(instance) {
-	return function(store_list, mode = 'readonly') {
-		return new Promise(resolve => {
-			resolve(Array.isArray(store_list)?store_list:[store_list]);
-		})
-			.then(store_list => {
-				let transaction = instance.transaction(store_list, mode);
-
-				store_list = store_list.map(name => {
-					return new Store(transaction, name);
-				});
-
-				if ( store_list.length === 1 ) {
-					return store_list[0];
-				} else {
-					return store_list;
-				}
-			});
 	};
 }
 

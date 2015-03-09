@@ -1,6 +1,5 @@
 'use strict';
 
-import LwMap from '../lwmap/lwmap';
 import {load_indexeddb} from './indexeddb';
 import load_index from './index';
 
