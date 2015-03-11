@@ -65,13 +65,13 @@ export function load_indexeddb(name, version) {
 									if ( index.name !== config.name ||
 										index.keyPath !== (config.keyPath || config.name) ||
 										index.unique !== config.unique ||
-										index.multiEntry !== config.multi_entry
+										index.multiEntry !== config.multiEntry
 									   ) {
 										   store.deleteIndex(config.name);
-										   store.createIndex(config.name, config.keyPath || config.name, {unique: config.unique, multiEntry: config.multi_entry});
+										   store.createIndex(config.name, config.keyPath || config.name, config);
 									   }
 								} else {
-									store.createIndex(config.name, config.keyPath || config.name, {unique: config.unique, multiEntry: config.multi_entry});
+									store.createIndex(config.name, config.keyPath || config.name, config);
 								}
 							});
 
