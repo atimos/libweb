@@ -1,6 +1,6 @@
 'use strict';
 
-import LwMap from '../lwmap/lwmap';
+let Stream = require('../lib/streamjs/stream', 'es5');
 
 let _trans = Symbol('trans'),
 	_store = Symbol('store'),
@@ -28,8 +28,6 @@ export function load_indexeddb(name, version) {
 			return this;
 		},
 		then: (resolve, reject) => {
-			let _config_map = config_map;
-
 			return new Promise((resolve, reject) => {
 				let request;
 
@@ -40,39 +38,20 @@ export function load_indexeddb(name, version) {
 				}
 
 				request.addEventListener('upgradeneeded', evt => {
-
-					for ( let entry of _config_map.entries() ) {
+					for ( let entry of config_map.entries() ) {
 						let [name, options] = entry,
-							store = evt.target.result.createObjectStore(name, options),
-							index = options.index || [];
+							index = options.index || [],
+							store = null;
 
-						Array.prototype
-							.filter.call(store.indexNames, name => {
-								return !index
-									.some(index => {
-										return name === index.name;
-									});
-							})
-							.forEach(name => {
-								store.deleteIndex(name);
-							});
+						if ( evt.target.result.objectStoreNames.contains(name) ) {
+							evt.target.result.deleteObjectStore(name);
+						}
+
+						store = evt.target.result.createObjectStore(name, options);
 
 						index
 							.forEach(config => {
-								if ( store.indexNames.contains(config.name) ) {
-									let index = store.index(config.name);
-
-									if ( index.name !== config.name ||
-										index.keyPath !== (config.keyPath || config.name) ||
-										index.unique !== config.unique ||
-										index.multiEntry !== config.multiEntry
-									   ) {
-										   store.deleteIndex(config.name);
-										   store.createIndex(config.name, config.keyPath || config.name, config);
-									   }
-								} else {
-									store.createIndex(config.name, config.keyPath || config.name, config);
-								}
+								store.createIndex(config.name, config.keyPath || config.name, config);
 							});
 
 					}
@@ -86,14 +65,17 @@ export function load_indexeddb(name, version) {
 							.then(store_list => {
 								let transaction = evt.target.result.transaction(store_list, mode);
 
-								store_list = store_list.map(name => {
-									return new Store(transaction, name);
-								});
-
 								if ( store_list.length === 1 ) {
-									return store_list[0];
+									return new Store(transaction, store_list[0]);
 								} else {
-									return store_list;
+									return store_list
+										.map(name => {
+											return {name: name, store: new Store(transaction, name)};
+										})
+										.reduce((map, store) => {
+											map.set(store.name, store.store);
+											return map;
+										}, new Map());
 								}
 							});
 					});
@@ -122,6 +104,7 @@ class Store {
 	get(key) {
 		return new Promise((resolve, reject) => {
 			add_transaction_handler(this[_trans], null, reject);
+
 			this[_trans].objectStore(this[_name])
 				.get(key)
 				.addEventListener('success', evt => {
@@ -135,32 +118,21 @@ class Store {
 	}
 
 	add(data) {
-		return new Promise((resolve, reject) => {
-			let result = new LwMap();
-			add_transaction_handler(this[_trans], resolve, reject, result);
-			update_database(this[_trans].objectStore(this[_name]), 'add', data, result);
-		});
+		return update_database(this[_trans], this[_name], 'add', data);
 	}
 
 	put(data) {
-		return new Promise((resolve, reject) => {
-			let result = new LwMap();
-			add_transaction_handler(this[_trans], resolve, reject, result);
-			update_database(this[_trans].objectStore(this[_name]), 'put', data, result);
-		});
+		return update_database(this[_trans], this[_name], 'put', data);
 	}
 
 	delete(key_list) {
-		return new Promise((resolve, reject) => {
-			let result = new LwMap();
-			add_transaction_handler(this[_trans], resolve, reject, result);
-			update_database(this[_trans].objectStore(this[_name]), 'delete', key_list, result);
-		});
+		return update_database(this[_trans], this[_name], 'delete', key_list);
 	}
 
 	clear() {
 		return new Promise((resolve, reject) => {
 			add_transaction_handler(this[_trans], null, reject);
+
 			this[_trans].objectStore(this[_name])
 				.clear()
 				.addEventListener('success', evt => {
@@ -179,6 +151,7 @@ class Index {
 	get(key) {
 		return new Promise((resolve, reject) => {
 			add_transaction_handler(this[_store].transaction, null, reject);
+
 			this[_store].index(this[_name])
 				.get(key)
 				.addEventListener('success', evt => {
@@ -190,6 +163,7 @@ class Index {
 	getKey(key) {
 		return new Promise((resolve, reject) => {
 			add_transaction_handler(this[_store].transaction, null, reject);
+
 			this[_store].index(this[_name])
 				.getKey(key)
 				.addEventListener('success', evt => {
@@ -228,8 +202,10 @@ class Range {
 		}
 	}
 
-	cursor(fn, result = new LwMap(), direction = 'next') {
+	cursor(fn, direction = 'next') {
 		return new Promise((resolve, reject) => {
+			let result = [];
+
 			add_transaction_handler(this[_trans], resolve, reject, result);
 
 			this[_store].openCursor(this.get_range(), direction)
@@ -262,8 +238,10 @@ class Range {
 }
 
 class IndexRange extends Range {
-	keyCursor(fn, result = new LwMap(), direction = 'next') {
+	keyCursor(fn, direction = 'next') {
 		return new Promise((resolve, reject) => {
+			let result = [];
+
 			add_transaction_handler(this[_trans], resolve, reject, result);
 
 			this[_store].openKeyCursor(this.get_range(), direction)
@@ -283,25 +261,46 @@ function add_transaction_handler(transaction, resolve, reject, result) {
 
 	if ( resolve !== null ) {
 		transaction.addEventListener('complete', () => {
-			resolve(result);
+			resolve(Stream(result));
 		});
 	}
 }
 
-function update_database(store, action, data, result) {
-	data = (Array.isArray(data)?data:[data]);
+function update_database(transaction, store_name, action, data) {
+	return new Promise((resolve, reject) => {
+		let store = transaction.objectStore(store_name),
+			result = [], array_result = Array.isArray(data);
 
-	if ( action === 'delete' ) {
-		data.forEach(key => {
-			store[action](key).addEventListener('success', () => {
-				result.set(key, key);
+		if ( array_result ) {
+			add_transaction_handler(transaction, resolve, reject, result);
+		} else {
+			add_transaction_handler(transaction, resolve, reject);
+
+			data = [data];
+		}
+
+		if ( action === 'delete' ) {
+			data.forEach(key => {
+				store[action](key).addEventListener('success', () => {
+					if ( array_result ) {
+						result.push(key);
+					} else {
+						resolve(key);
+					}
+				});
 			});
-		});
-	} else {
-		data.forEach(item => {
-			store[action](item).addEventListener('success', evt => {
-				result.set(evt.target.result, item);
+		} else {
+			data.forEach(item => {
+				store[action](item).addEventListener('success', evt => {
+					item[evt.target.source.keyPath] = evt.target.result;
+
+					if ( array_result ) {
+						result.push(item);
+					} else {
+						resolve(item);
+					}
+				});
 			});
-		});
-	}
+		}
+	});
 }
