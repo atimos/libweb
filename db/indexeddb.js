@@ -59,13 +59,15 @@ export function load_indexeddb(name, version) {
 
 				request.addEventListener('success', evt => {
 					resolve(function(store_list, mode = 'readonly') {
+						let return_map = Array.isArray(store_list);
+
 						return new Promise(resolve => {
-							resolve(Array.isArray(store_list)?store_list:[store_list]);
+							resolve(return_map?store_list:[store_list]);
 						})
 							.then(store_list => {
 								let transaction = evt.target.result.transaction(store_list, mode);
 
-								if ( store_list.length === 1 ) {
+								if ( return_map === false ) {
 									return new Store(transaction, store_list[0]);
 								} else {
 									return store_list
@@ -228,12 +230,17 @@ class Range {
 	}
 
 	then(resolve, reject) {
-		return this.cursor((cursor, result) => {
-			if ( cursor !== null ) {
-				result.set(cursor.primaryKey, cursor.value);
-				cursor.continue();
-			}
-		}).then(resolve, reject);
+		return this
+			.cursor((cursor, result) => {
+				if ( cursor !== null ) {
+					result.push(cursor.value);
+					cursor.continue();
+				}
+			})
+			.then(result => {
+				console.log(result.size());
+				return Stream(result);
+			}, reject);
 	}
 }
 

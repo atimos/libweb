@@ -7,11 +7,12 @@ let _opt = Symbol('options'),
 	_pos = Symbol('position'),
 	self_document = window.document.currentScript.ownerDocument;
 
-class DataList extends window.HTMLDataListElement {
+class LwDataList extends window.HTMLDataListElement {
 	set options(options) {
 		if ( Array.isArray(options) !== true ) {
 			throw new Error('options has to be an Array');
 		}
+		console.log(options);
 		this[_opt] = options;
 		this[_pos] = 0;
 		render(this);
@@ -96,4 +97,5 @@ function select_element(dl) {
 		});
 }
 
-window.document.registerElement('lw-datalist', {prototype: DataList.prototype});
+
+window.document.registerElement('lw-datalist', {prototype: LwDataList.prototype});
