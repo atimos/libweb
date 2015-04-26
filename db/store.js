@@ -112,19 +112,19 @@ class Store {
 	}
 
 	put(items) {
-		return update_store('put', this[_db], this[_index], this[_name], items, this[_index_store_name]);
+		return update_store('put', this, items);
 	}
 
 	add(items) {
-		return update_store('add', this[_db], this[_index], this[_name], items, this[_index_store_name]);
+		return update_store('add', this, items);
 	}
 
 	delete(id_list) {
-		return update_store('add', this[_db], this[_index], this[_name], id_list, this[_index_store_name]);
+		return update_store('add', this, id_list);
 	}
 
 	clear() {
-		return update_store('clear', this[_db], this[_index], this[_name], this[_index_store_name]);
+		return update_store('clear', this);
 	}
 
 	search(query) {
@@ -184,7 +184,12 @@ class Store {
 	}
 }
 
-function update_store(action_type, db, index, name, items, idx_store_name) {
+function update_store(action_type, store, items) {
+	let db = store[_db],
+		index = store[_index],
+		name = store[_name],
+		index_store_name = store[_index_store_name];
+
 	return db.get(name, 'readwrite')
 		.then(store => {
 			let action = store[action_type](items);
@@ -192,17 +197,17 @@ function update_store(action_type, db, index, name, items, idx_store_name) {
 			if ( index !== null ) {
 				action = action.then(index[action_type](items));
 
-				if ( idx_store_name ) {
+				if ( index_store_name ) {
 					action = action.then(() => {
 						if ( action_type === 'clear' ) {
 							return index.raw_get_data()
 								.then(data => {
-									return db.get(idx_store_name, 'readwrite').delete(data.name);
+									return db.get(index_store_name, 'readwrite').delete(data.name);
 								});
 						} else {
 							return index.raw_get_data()
 								.then(data => {
-									return db.get(idx_store_name, 'readwrite')
+									return db.get(index_store_name, 'readwrite')
 										.then(store => {
 											return store.put(data);
 										});
