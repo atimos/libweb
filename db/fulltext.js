@@ -1,7 +1,7 @@
 'use strict';
 
-let Stream = require('../lib/streamjs/stream', 'es5'),
-	Lunr = require('../lib/lunr.js/lunr', 'es5');
+let Promise = require('../lib/bluebird/bluebird');
+let Lunr = require('../lib/lunr.js/lunr', 'es5');
 
 let _cfg = Symbol('cfg'),
 	_index = Symbol('index');
@@ -38,44 +38,85 @@ export default function() {
 
 class Index {
 	constructor(cfg) {
+		this[_index] = null;
 		this[_cfg] = cfg;
-		this.reset();
+		this.clear();
 	}
 
-	put(item) {
+	put(items) {
 		return new Promise(resolve => {
-			resolve(this[_index].update(item));
+			if ( Array.isArray(items) ) {
+				items.forEach(item => {
+					this[_index].update(item);
+				});
+			} else {
+				this[_index].update(items);
+			}
+
+			resolve(items);
 		});
 	}
 
-	add(item) {
+	add(items) {
 		return new Promise(resolve => {
-			resolve(this[_index].add(item));
+			if ( Array.isArray(items) ) {
+				items.forEach(item => {
+					this[_index].add(item);
+				});
+			} else {
+				this[_index].add(items);
+			}
+
+			resolve(items);
 		});
 	}
 
-	delete(id) {
+	delete(id_list) {
 		return new Promise(resolve => {
-			resolve(this.index.remove({[this[_index]._ref]: id}));
+			let ref = this[_cfg].ref;
+
+			if ( Array.isArray(id_list) ) {
+				id_list.forEach(item => {
+					this.index.remove({[ref]: id});
+				});
+			} else {
+				this.index.remove({[ref]: id_list});
+			}
+
+			resolve(id_list);
 		});
 	}
 
 	search(query) {
+		return Promise.resolve(this[_index].search(query));
+	}
+
+	clear() {
 		return new Promise(resolve => {
-			resolve(Stream(this[_index].search(query)));
+			let cfg = this[_cfg];
+
+			this[_index] = Lunr(function() {
+				this.ref(cfg.ref);
+
+				cfg.fields
+					.map(field => {
+						this.field(field.name, {boost: field.boost||0});
+					});
+			});
+
+			resolve(this);
 		});
 	}
 
-	reset() {
-		let cfg = this[_cfg];
+	raw_set_data(data) {
+		return new Promise(resolve => {
+			resolve();
+		});
+	}
 
-		this[_index] = Lunr(function() {
-			this.ref(cfg.ref);
-
-			cfg.fields
-				.map(field => {
-					this.field(field.name, {boost: field.boost||0});
-				});
+	raw_get_data() {
+		return new Promise(resolve => {
+			resolve();
 		});
 	}
 }

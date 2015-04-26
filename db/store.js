@@ -1,18 +1,20 @@
 'use strict';
 
-import {load_indexeddb} from './indexeddb';
-import fulltext_index from './fulltext';
+import indexeddb from './indexeddb';
+import fulltext from './fulltext';
 
-let Stream = require('../lib/streamjs/stream', 'es5');
+let Promise = require('../lib/bluebird/bluebird');
 
-export default function(name, index_store_name, version) {
-	let index = fulltext_index(name, version),
-		db = load_indexeddb(),
-		index_db_cfg = new Map();
+let _name = Symbol('name'),
+	_db = Symbol('db'),
+	_index = Symbol('index');
+
+export default function(db_name, index_store_name, version) {
+	let index = fulltext(),
+		db = indexeddb(db_name, version);
 
 	return {
 		index: function(name, cfg) {
-			index_db_cfg.set(name, {name: name, store: cfg.store});
 			index.set(name, cfg);
 			return this;
 		},
@@ -23,179 +25,153 @@ export default function(name, index_store_name, version) {
 		then: function(resolve, reject) {
 			return Promise.all([db, index])
 				.then(result => {
-					let [db, index] = result,
-						work_queue = [];
-
-					for ( let entry of index.entries() ) {
-						let [name, index] = entry;
-
-						work_queue.push(fill_index(db, index, index_store_name, index_db_cfg.get(name)));
-					}
-
-					return Promise.all(work_queue)
-						.then(() => {
-							return [db, index];
-						});
-				}).then(result => {
 					let [db, index] = result;
 
-					return store_loader(db, index);
+					return db.get(index_store_name)
+						.then(store => {
+							for ( let entry of index.entries() ) {
+								let [name, index] = entry;
+
+								store.get(name)
+									.then(index_data => {
+										if ( index_data ) {
+											return index.raw_set_data(index_data);
+										}
+									});
+							}
+						})
+						.then(() => {
+							return result;
+						});
+				})
+				.then(result => {
+					let [db, index] = result;
+
+					return {
+						get: function(store_list) {
+							if ( Array.isArray(store_list) ) {
+								let store_map = new Map();
+
+								store_list.forEach(store_name => {
+									store_map.set(store_name, new Store(db, index, store_name));
+								});
+
+								return store_map;
+							} else {
+								return new Store(db, index, store_list);
+							}
+						},
+						raw_index: index,
+						raw_db: db
+					};
 				}).then(resolve, reject);
 		}
 	};
 }
 
-function fill_index(db, index, store_name, cfg) {
-	console.log(store_name);
-	return db(store_name)
-		.then(store => {
-			return store.get(cfg.name);
-		})
-		.then(result => {
-			if ( result !== null ) {
-				return Stream([]);
-			} else if ( cfg.store !== undefined ) {
-				db(cfg.store)
-					.then(store => {
-						return store.range();
-					});
-			}
-
-		})
-		.then(result => {
-			let work_queue = result.map(item => {
-				index.put(item);
-			}).toArray();
-
-			return Promise.all(work_queue);
-		});
-}
-
-function store_loader(db, index) {
-	return function(store_list) {
-		let return_map = Array.isArray(store_list);
-
-		return db(store_list)
-			.then(store => {
-				if ( return_map === true ) {
-					let store_map = new Map();
-
-					for ( let entry of store.entries() ) {
-						store_map.set(entry[0], new Store(entry[1], index.get(entry[0])));
-					}
-
-					return store_map;
-				} else {
-					return new Store(store, index.get(store_list));
-				}
-			});
-	};
-}
-
 class Store {
-	constructor(store, index) {
-		this.store = store;
-		this.index = index;
+	constructor(db, index, name) {
+		this[_name] = name;
+		this[_db] = db;
+		this[_index] = index.get(name) || null;
 	}
 
 	get(...args) {
-		return this.store.get(...args);
+		return this[_db].get(this[_name])
+			.then(store => {
+				return store.get(...args);
+			});
 	}
 
 	range(...args) {
-		return this.store.range(...args);
+		return this[_db].get(this[_name])
+			.then(store => {
+				return store.range(...args);
+			});
 	}
 
-	search(...args) {
-		if ( this.index === null ) {
-			return Stream([]);
+	put(items) {
+		return update_store('put', this[_db], this[_index], this[_name], items);
+	}
+
+	add(items) {
+		return update_store('add', this[_db], this[_index], this[_name], items);
+	}
+
+	delete(id_list) {
+		return update_store('add', this[_db], this[_index], this[_name], id_list);
+	}
+
+	clear() {
+		return update_store('clear', this[_db], this[_index], this[_name]);
+	}
+
+	search(query) {
+		if ( this[_index] === null ) {
+			return Promise.reject(new Error('No index not found for: ' + this[_name]));
 		}
-		/*
-		let key_list = result
-		.map((item, key) => {
-			return key;
-		})
-		.reduce((list, item) => {
-			list.push(item);
-			return list;
-		}, []);
 
-		key_list.sort();
-	   */
+		return this[_index].search(query)
+			.then(result => {
+				let key_list = [],
+					last_key;
 
-		/*
-		return store
-		.range('lowerupper', key_list[0], key_list[key_list.length -1])
-		.cursor((cursor, result) => {
-			if ( cursor !== null ) {
-				let next_key = key_list.shift(),
-					item = result.get(cursor.key);
-
-				if ( item !== undefined ) {
-					result.set(cursor.key, {score: item, value: cursor.value});
+				if ( result.length === 0 ) {
+					return [];
 				}
 
-				if ( next_key !== undefined ) {
-					cursor.continue(next_key);
-				}
+				result = result
+					.reduce((map, item) => {
+						map.set(item.ref, null);
+						key_list.push(item.ref);
 
+						return map;
+					}, new Map());
+
+				key_list.sort();
+
+				last_key = key_list[key_list.length -1];
+
+				return this[_db].get(this[_name])
+					.then(store => {
+						return store.range('bound', key_list.shift(), last_key)
+							.cursor(cursor => {
+								if ( cursor !== null ) {
+									let next_key = key_list.shift(),
+										item = result.get(cursor.key);
+
+									if ( item !== undefined ) {
+										result.set(cursor.key, cursor.value);
+									}
+
+									if ( next_key !== undefined ) {
+										cursor.continue(next_key);
+									}
+								}
+							})
+							.then(() => {
+								let result_list = [];
+
+								for ( let item of result.values() ) {
+									result_list.push(item);
+								}
+
+								return result_list;
+							});
+					});
+			});
+	}
+}
+
+function update_store(action_type, db, index, name, items) {
+	return db.get(name, 'readwrite')
+		.then(store => {
+			let action = store[action_type](items);
+
+			if ( index !== null ) {
+				action = action.then(index[action_type](items));
 			}
-		}, result);
-	   */
 
-		return this.index.search(...args)
-			.then(result => {
-				result.flatMap('ref');
-
-				let array = result.
-					sort().toArray();
-
-				console.log(array);
-				return Stream([]);
-				/*
-				return Promise.all(result
-					.map(item => {
-						return this.db.get(item.ref);
-					})
-					.toArray()
-				);
-			   */
-			});
-	}
-
-	put(data) {
-		return this.store.put(Array.isArray(data)?data:[data])
-			.then(result => {
-				return Promise.all(result
-					.map(item => {
-						return this.index.put(item);
-					})
-					.toArray()
-				);
-			});
-	}
-
-	add(data) {
-		return this.store.add(Array.isArray(data)?data:[data])
-			.then(result => {
-				return Promise.all(result
-					.map(item => {
-						return this.index.add(item);
-					})
-					.toArray()
-				);
-			});
-	}
-
-	delete(data) {
-		return this.store.delete(Array.isArray(data)?data:[data])
-			.then(result => {
-				return Promise.all(result
-					.map(item => {
-						return this.index.delete(item);
-					})
-					.toArray()
-				);
-			});
-	}
+			return action;
+		});
 }
