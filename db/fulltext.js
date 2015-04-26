@@ -110,18 +110,18 @@ class Index {
 		});
 	}
 
-	raw_set_data(idx_data) {
+	raw_set_data(data) {
 		return new Promise(resolve => {
-			this[_index] = Lunr.Index.load(JSON.parse(idx_data.data));
-			resolve();
+			this[_index] = Lunr.Index.load(data.index);
+			resolve(this[_index]);
 		});
 	}
 
 	raw_get_data() {
 		return new Promise(resolve => {
 			resolve({
-				key: this[_name],
-				data: JSON.stringify(this[_index]) 
+				name: this[_name],
+				index: JSON.parse(JSON.stringify(this[_index]))
 			});
 		});
 	}
