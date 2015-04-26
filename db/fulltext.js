@@ -112,17 +112,16 @@ class Index {
 
 	raw_set_data(data) {
 		return new Promise(resolve => {
-			this[_index] = Lunr.Index.load(data.index);
+			this[_index] = Lunr.Index.load(data);
 			resolve(this[_index]);
 		});
 	}
 
 	raw_get_data() {
 		return new Promise(resolve => {
-			resolve({
-				name: this[_name],
-				index: JSON.parse(JSON.stringify(this[_index]))
-			});
+			let data = JSON.parse(JSON.stringify(this[_index]));
+			data.name = this[_name];
+			resolve(data);
 		});
 	}
 }
