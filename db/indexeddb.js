@@ -1,6 +1,6 @@
 'use strict';
 
-let Promise = require('../lib/bluebird/bluebird');
+let Promise = require('../lib/bluebird/bluebird.js');
 
 let _store = Symbol('store'),
 	_trans = Symbol('trans'),

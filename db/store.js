@@ -3,7 +3,7 @@
 import indexeddb from './indexeddb';
 import fulltext from './fulltext';
 
-let Promise = require('../lib/bluebird/bluebird');
+let Promise = require('../lib/bluebird/bluebird.js');
 
 let _name = Symbol('name'),
 	_db = Symbol('db'),

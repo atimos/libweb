@@ -1,7 +1,7 @@
 'use strict';
 
-let Promise = require('../lib/bluebird/bluebird');
-let Lunr = require('../lib/lunr.js/lunr', 'es5');
+let Promise = require('../lib/bluebird/bluebird.js');
+let Lunr = require('../lib/lunr.js/lunr.js');
 
 let _cfg = Symbol('cfg'),
 	_index = Symbol('index');
