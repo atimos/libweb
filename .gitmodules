@@ -6,3 +6,7 @@
 	path = lib/lunr.js
 	url = https://github.com/olivernn/lunr.js.git
 	branch = master
+[submodule "lib/streamjs"]
+	path = lib/streamjs
+	url = https://github.com/winterbe/streamjs.git
+	branch = master

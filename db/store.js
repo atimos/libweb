@@ -4,6 +4,7 @@ import indexeddb from './indexeddb';
 import fulltext from './fulltext';
 
 let Promise = require('../lib/bluebird/bluebird.js');
+let Stream = require('../lib/streamjs/stream.js');
 
 let _name = Symbol('name'),
 	_db = Symbol('db'),
@@ -90,6 +91,13 @@ class Store {
 		return this[_db].get(this[_name])
 			.then(store => {
 				return store.get(...args);
+			})
+			.then(result => {
+				if ( Array.isArray(result) ) {
+					return Stream(result);
+				}
+
+				return result;
 			});
 	}
 
@@ -97,6 +105,9 @@ class Store {
 		return this[_db].get(this[_name])
 			.then(store => {
 				return store.range(...args);
+			})
+			.then(result => {
+				return Stream(result);
 			});
 	}
 
@@ -166,7 +177,7 @@ class Store {
 									result_list.push(item);
 								}
 
-								return result_list;
+								return Stream(result_list);
 							});
 					});
 			});
@@ -201,5 +212,12 @@ function update_store(action_type, db, index, name, items, idx_store_name) {
 				}
 			}
 			return action;
+		})
+		.then(result => {
+			if ( Array.isArray(result) ) {
+				return Stream(result);
+			}
+
+			return result;
 		});
 }
