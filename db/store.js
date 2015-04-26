@@ -7,6 +7,7 @@ let Promise = require('../lib/bluebird/bluebird.js');
 
 let _name = Symbol('name'),
 	_db = Symbol('db'),
+	_index_store_name = Symbol('idx_store_name'),
 	_index = Symbol('index');
 
 export default function(db_name, index_store_name, version) {
@@ -27,18 +28,26 @@ export default function(db_name, index_store_name, version) {
 				.then(result => {
 					let [db, index] = result;
 
+					if ( !index_store_name ) {
+						return result;
+					}
+
 					return db.get(index_store_name)
 						.then(store => {
+							let work_queue = [];
+
 							for ( let entry of index.entries() ) {
 								let [name, index] = entry;
 
-								store.get(name)
+								work_queue.push(store.get(name)
 									.then(index_data => {
 										if ( index_data ) {
 											return index.raw_set_data(index_data);
 										}
-									});
+									}));
 							}
+
+							return Promise.all(work_queue);
 						})
 						.then(() => {
 							return result;
@@ -53,12 +62,12 @@ export default function(db_name, index_store_name, version) {
 								let store_map = new Map();
 
 								store_list.forEach(store_name => {
-									store_map.set(store_name, new Store(db, index, store_name));
+									store_map.set(store_name, new Store(db, index, store_name, index_store_name));
 								});
 
 								return store_map;
 							} else {
-								return new Store(db, index, store_list);
+								return new Store(db, index, store_list, index_store_name);
 							}
 						},
 						raw_index: index,
@@ -70,9 +79,10 @@ export default function(db_name, index_store_name, version) {
 }
 
 class Store {
-	constructor(db, index, name) {
+	constructor(db, index, name, index_store_name) {
 		this[_name] = name;
 		this[_db] = db;
+		this[_index_store_name] = index_store_name;
 		this[_index] = index.get(name) || null;
 	}
 
@@ -91,19 +101,19 @@ class Store {
 	}
 
 	put(items) {
-		return update_store('put', this[_db], this[_index], this[_name], items);
+		return update_store('put', this[_db], this[_index], this[_name], items, this[_index_store_name]);
 	}
 
 	add(items) {
-		return update_store('add', this[_db], this[_index], this[_name], items);
+		return update_store('add', this[_db], this[_index], this[_name], items, this[_index_store_name]);
 	}
 
 	delete(id_list) {
-		return update_store('add', this[_db], this[_index], this[_name], id_list);
+		return update_store('add', this[_db], this[_index], this[_name], id_list, this[_index_store_name]);
 	}
 
 	clear() {
-		return update_store('clear', this[_db], this[_index], this[_name]);
+		return update_store('clear', this[_db], this[_index], this[_name], this[_index_store_name]);
 	}
 
 	search(query) {
@@ -163,15 +173,33 @@ class Store {
 	}
 }
 
-function update_store(action_type, db, index, name, items) {
+function update_store(action_type, db, index, name, items, idx_store_name) {
 	return db.get(name, 'readwrite')
 		.then(store => {
 			let action = store[action_type](items);
 
 			if ( index !== null ) {
 				action = action.then(index[action_type](items));
-			}
 
+				if ( idx_store_name ) {
+					action = action.then(() => {
+						if ( action_type === 'clear' ) {
+							return index.raw_get_data()
+								.then(data => {
+									return db.get(idx_store_name, 'readwrite').delete(data.name);
+								});
+						} else {
+							return index.raw_get_data()
+								.then(data => {
+									return db.get(idx_store_name, 'readwrite')
+										.then(store => {
+											return store.put(data);
+										});
+								});
+						}
+					});
+				}
+			}
 			return action;
 		});
 }

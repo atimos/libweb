@@ -4,6 +4,7 @@ let Promise = require('../lib/bluebird/bluebird.js');
 let Lunr = require('../lib/lunr.js/lunr.js');
 
 let _cfg = Symbol('cfg'),
+	_name = Symbol('name'),
 	_index = Symbol('index');
 
 export default function() {
@@ -19,7 +20,7 @@ export default function() {
 			return new Promise(resolve => {
 				for ( let entry of index_map.entries() ) {
 					let [name, cfg] = entry;
-					let index = new Index(cfg);
+					let index = new Index(name, cfg);
 
 					data_map
 						.get(name)
@@ -37,7 +38,8 @@ export default function() {
 }
 
 class Index {
-	constructor(cfg) {
+	constructor(name, cfg) {
+		this[_name] = name;
 		this[_index] = null;
 		this[_cfg] = cfg;
 		this.clear();
@@ -108,15 +110,19 @@ class Index {
 		});
 	}
 
-	raw_set_data(data) {
+	raw_set_data(idx_data) {
 		return new Promise(resolve => {
+			this[_index] = Lunr.Index.load(JSON.parse(idx_data.data));
 			resolve();
 		});
 	}
 
 	raw_get_data() {
 		return new Promise(resolve => {
-			resolve();
+			resolve({
+				key: this[_name],
+				data: JSON.stringify(this[_index]) 
+			});
 		});
 	}
 }
