@@ -4,8 +4,8 @@ export function node(node, data) {
 	let tmp = document.createDocumentFragment();
 	tmp.appendChild(node);
 
-	Array.prototype.forEach.call(tmp.querySelectorAll('[data-content]'), node => {
-		node.dataset.content.split('|')
+	Array.prototype.forEach.call(tmp.querySelectorAll('[data-tpl-val]'), node => {
+		node.dataset.tplVal.split('|')
 			.some(content => {
 				content = content.trim();
 
@@ -15,24 +15,29 @@ export function node(node, data) {
 				}
 			});
 
-		delete node.dataset.content;
+		delete node.dataset.tplVal;
 	});
 
-	Array.prototype.forEach.call(tmp.querySelectorAll('[data-attribute]'), node => {
-		node.dataset.attribute.split(',').forEach(attribute => {
+	Array.prototype.forEach.call(tmp.querySelectorAll('[data-tpl-attr]'), node => {
+		node.dataset.tplAttr.split(',').forEach(attribute => {
 			let [name, value] = attribute.split(':')
-				.map(item => {
-					return item.trim();
-				});
+					.map(item => {
+						return item.trim();
+					}),
+				_data = data[value||name];
 
-			if ( data[value||name] !== undefined ) {
-				node.setAttribute(name, data[value||name]);
-				return true;
+			switch ( typeof _data ) {
+				case 'undefined':
+					break;
+				case 'boolean':
+					node.setAttribute(name, value||name);
+					break;
+				default:
+					node.setAttribute(name, _data);
 			}
-
 		});
 
-		delete node.dataset.attribute;
+		delete node.dataset.tplAttr;
 	});
 
 	tmp.removeChild(tmp.children[0]);
