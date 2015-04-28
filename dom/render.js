@@ -28,6 +28,7 @@ export function node(node, data) {
 
 			switch ( typeof _data ) {
 				case 'undefined':
+					node.setAttribute(name, '');
 					break;
 				case 'boolean':
 					node.setAttribute(name, value||name);
