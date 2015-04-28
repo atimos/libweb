@@ -1,93 +1,173 @@
 'use strict';
 
 import {array as dom_array} from '../../dom/collection';
-import {item as render_item} from '../../dom/render';
+import {selector as dom_clear_selector} from '../../dom/clear';
+import {node as render_node} from '../../dom/render';
 
-let _opt = Symbol('options'),
+let _items = Symbol('options'),
+	_groups = Symbol('groups'),
 	_pos = Symbol('position'),
+	_group_index = Symbol('group_index'),
 	self_document = window.document.currentScript.ownerDocument;
 
 class LwDataList extends window.HTMLDataListElement {
-	set options(options) {
-		if ( Array.isArray(options) !== true ) {
-			throw new Error('options has to be an Array');
-		}
-		console.log(options);
-		this[_opt] = options;
-		this[_pos] = 0;
+	set options(groups) {
+		this[_groups] = groups;
+
+		this[_items] = this[_groups]
+			.map((group, group_index) => {
+				if ( Array.isArray(group.options) ) {
+					return group.options
+						.map(option => {
+							return {value: option, group: group.value, [_group_index]: group_index};
+						});
+				}
+				return {value: group, group: null, [_group_index]: group_index};
+			})
+			.reduce((options, option) => {
+				if ( Array.isArray(option) ) {
+					option.forEach(option => {
+						options.push(option);
+					});
+				} else {
+					options.push(option);
+				}
+
+				return options;
+			}, [])
+			.filter(item => {
+				return item !== undefined;
+			});
+
 		render(this);
-		select_element(this);
 	}
 
 	get options() {
-		return this[_opt];
+		return undefined;
 	}
 
 	get value() {
-		return this.options[this[_pos]];
+		return this[_items][this[_pos]];
 	}
 
 	createdCallback() {
-		this[_pos] = -1;
-		this[_opt] = [];
+		reset(this);
 		this.addEventListener('keydown', keydown_event.bind(this));
 	}
 
 	attachedCallback() {
 		render(this);
 	}
+
+	next() {
+		if ( this[_pos] < this[_items].length - 1 ) {
+			this[_pos] += 1;
+			select_option(this);
+		}
+	}
+
+	previous() {
+		if ( this[_pos] > 0 ) {
+			this[_pos] -= 1;
+			select_option(this);
+		}
+	}
+
+	next_group() {
+		let pos = next_group(this, 1);
+
+		if ( pos < this[_items].length ) {
+			this[_pos] = pos;
+			select_option(this);
+		}
+	}
+
+	previous_group() {
+		let pos = next_group(this, -1);
+
+		if ( pos >= 0 ) {
+			this[_pos] = pos;
+			select_option(this);
+		}
+	}
 }
 
 function keydown_event(evt) {
-	let key = evt.keyCode, dl = evt.target, pos = dl[_pos];
+	let key = evt.keyCode, shift_key = evt.shiftKey, dl = this;
 
-	if ( key === 40 || ( key === 9 && !evt.shiftKey ) ) {
-		pos += 1;
-	} else if ( key === 38 || ( key === 9 && evt.shiftKey ) ) {
-		pos -= 1;
+	if ( key === 37 || ( key === 9 && shift_key ) ) {
+		dl.previous_group();
+	} else if ( key === 39 || ( key === 9 && !shift_key ) ) {
+		dl.next_group();
+	} else if ( key === 38 ) {
+		dl.previous();
+	} else if ( key === 40 ) {
+		dl.next();
 	} else if ( key === 27 ) {
-		dl.options = [];
+		reset(dl);
 	} else if ( key === 13 && dl.value !== undefined ) {
 		dl.dispatchEvent(new CustomEvent('select', {detail:dl.value}));
-		dl.options = [];
-	}
-
-	if ( pos > -1 && pos < dl.options.length ) {
-		dl[_pos] = pos;
-		select_element(dl);
+		reset(dl);
 	}
 }
 
 function render(dl) {
-	let node_list,
-		option = document.createElement('option'),
-		template = dl.querySelector(':scope > template');
-
-	if ( template === undefined ) {
-		template = self_document.querySelector(':scope > template');
+	let fragment, group_tpl, option_tpl;
+	
+	if ( dl[_items].length === 0 ) {
+		return dom_clear_selector(':scope > *:not(template)', dl);
 	}
 
-	option.appendChild(template.content.cloneNode(true));
+	fragment = document.createDocumentFragment();
+	group_tpl = dl.querySelector(':scope > template');
 
-	node_list = dl.options
-		.map(item => {
-			return render_item(option.cloneNode(true), item);
-		})
-		.reduce((node_list, node) => {
-			node_list.appendChild(node);
-			return node_list;
-		}, document.createDocumentFragment());
+	if ( group_tpl === undefined ) {
+		group_tpl = self_document.querySelector(':scope > template').content.children[0].cloneNode(true);
+	} else {
+		group_tpl = group_tpl.content.children[0].cloneNode(true);
+	}
 
-	dom_array(':scope > *:not(template)', dl)
-		.forEach(node => {
-			node.parentNode.removeChild(node);
+	if ( group_tpl.nodeName === 'OPTGROUP' ) {
+		option_tpl = group_tpl.removeChild(group_tpl.children[0]);
+	} else {
+		option_tpl = group_tpl;
+		group_tpl = document.createElement('optgroup');
+	}
+
+	dl[_groups]
+		.forEach(item => {
+			let group = group_tpl.cloneNode(true);
+
+			if ( Array.isArray(item.options) ) {
+				render_node(group, item.value);
+
+				item.options.forEach(item => {
+					let option = option_tpl.cloneNode(true);
+
+					render_node(option, item);
+
+					group.appendChild(option);
+				});
+
+				fragment.appendChild(group);
+			} else {
+				let option = option_tpl.cloneNode(true);
+
+				render_node(option, item.value);
+
+				fragment.appendChild(option);
+			}
 		});
 
-	dl.appendChild(node_list);
+	dom_clear_selector(':scope > *:not(template)', dl);
+
+	dl.appendChild(fragment);
+
+	select_option(dl);
 }
 
-function select_element(dl) {
-	dom_array(':scope > *:not(template)', dl)
+function select_option(dl) {
+	dom_array(':scope option', dl)
 		.forEach((node, index) => {
 			if ( index === dl[_pos] ) {
 				node.classList.add('selected');
@@ -97,5 +177,30 @@ function select_element(dl) {
 		});
 }
 
+function reset(dl) {
+	dl[_pos] = 0;
+	dl[_items] = [];
+	dl[_groups] = [];
+	render(dl);
+}
+
+function next_group(dl, direction) {
+	let pos = 0, group_index = dl.value[_group_index] + direction;
+
+	dl[_groups]
+		.some((group, index) => {
+			if ( index === group_index ) {
+				return true;
+			}
+
+			if ( Array.isArray(group.options) ) {
+				pos += group.options.length;
+			} else {
+				pos += 1;
+			}
+		});
+
+	return pos;
+}
 
 window.document.registerElement('lw-datalist', {prototype: LwDataList.prototype});
