@@ -5,10 +5,13 @@ import {node_list} from './collection';
 let events = Object.getOwnPropertyNames(document)
 	.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(Object.getPrototypeOf(document))))
 	.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(window)))
-	.filter(function(attribute, index, list) {
+	.filter((attribute, index, list) => {
 		return !attribute.indexOf('on') &&
 			( document[attribute] === null || typeof document[attribute] === 'function' ) &&
 			list.indexOf(attribute) == index;
+	})
+	.map(item => {
+		return item.toLowerCase();
 	});
 
 export default function(tpl, data) {
@@ -113,7 +116,7 @@ function set_attributes(node, data) {
 
 			value = value.toString();
 
-			if ( events.indexOf(name.toLowerCase()) !== -1 && value.match(/^javascript:/i) === null ) {
+			if ( events.indexOf(name.toLowerCase()) === -1 && value.match(/^javascript:/i) === null ) {
 				node.setAttribute(attr_name, value);
 			}
 		});
