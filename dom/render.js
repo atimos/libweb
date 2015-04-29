@@ -2,6 +2,15 @@
 
 import {node_list} from './collection';
 
+let events = Object.getOwnPropertyNames(document)
+	.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(Object.getPrototypeOf(document))))
+	.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(window)))
+	.filter(function(attribute, index, list) {
+		return !attribute.indexOf('on') &&
+			( document[attribute] === null || typeof document[attribute] === 'function' ) &&
+			list.indexOf(attribute) == index;
+	});
+
 export default function(tpl, data) {
 	let node = tpl.content.cloneNode(true);
 
@@ -87,7 +96,11 @@ function set_attributes(node, data) {
 					break;
 			}
 
-			node.setAttribute(attr_name, secure_attribute(attr_name, value, node));
+			value = value.toString();
+
+			if ( events.indexOf(name.toLowerCase()) !== -1 && value.match(/^javascript:/i) === null ) {
+				node.setAttribute(attr_name, value);
+			}
 		});
 
 		delete node.dataset.tplAttr;
@@ -113,23 +126,4 @@ function set_value(node, value) {
 	});
 
 	tmp.removeChild(tmp.children[0]);
-}
-
-function secure_attribute(name, value, node) {
-	value = value.toString();
-
-	let matched_events = Object.getOwnPropertyNames(node)
-		.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(Object.getPrototypeOf(node))))
-		.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(node)))
-		.filter(function(attribute){
-			return attribute.indexOf('on') === 0 &&
-				(node[attribute] === null || typeof node[attribute] === 'function') &&
-				attribute.toLowerCase() === name.toLowerCase();
-		});
-	
-	if ( matched_events.length > 0 || value.match(/^javascript:/i) !== null ) {
-		return '';
-	}
-
-	return value;
 }
