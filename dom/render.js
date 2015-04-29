@@ -32,6 +32,13 @@ export default function(tpl, data) {
 
 function render_node(node, data) {
 	if ( node !== null ) {
+		let tpl = null;
+
+		if ( node.nodeName === 'TEMPLATE' ) {
+			tpl = node;
+			node = node.content.cloneNode(true);
+		}
+
 		delete node.dataset.tplRel;
 
 		if ( data.children === undefined ) {
@@ -46,6 +53,14 @@ function render_node(node, data) {
 				} else {
 					render_node(node.querySelector(':scope > [data-tpl-rel="' + name + '"]'), data.children[name]);
 				}
+			}
+		}
+
+		if ( tpl !== null ) {
+			if ( tpl.nextSibling === undefined ) {
+				tpl.parentNode.appendChild(node);
+			} else {
+				tpl.insertBefore(node, tpl.nextSibling);
 			}
 		}
 	}
