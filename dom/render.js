@@ -1,6 +1,6 @@
 'use strict';
 
-import {node_list} from './collection';
+import {node_list as node_list_array} from './collection';
 
 let events = Object.getOwnPropertyNames(document)
 	.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(Object.getPrototypeOf(document))))
@@ -17,7 +17,7 @@ let events = Object.getOwnPropertyNames(document)
 export default function(tpl, data) {
 	let node = tpl.content.cloneNode(true);
 
-	node_list(node.children)
+	node_list_array(node.children)
 		.forEach(node => {
 			for ( let name in data ) {
 				if ( node.dataset.tplRel === name ) {
@@ -63,7 +63,7 @@ function render_node(node, data) {
 			if ( tpl.nextSibling === undefined ) {
 				tpl.parentNode.appendChild(node);
 			} else {
-				tpl.insertBefore(node, tpl.nextSibling);
+				tpl.parentNode.insertBefore(node, tpl.nextSibling);
 			}
 		}
 	}
@@ -71,17 +71,46 @@ function render_node(node, data) {
 
 function render_list(node, data) {
 	if ( node !== null ) {
-		let node_list = document.createDocumentFragment();
+		let node_list = document.createDocumentFragment(),
+			tpl = null;
+
+		if ( node.nodeName.toLowerCase() === 'template' ) {
+			tpl = node;
+			node = node.content;
+		}
 
 		data.forEach(item => {
-			let _node = node.cloneNode(true);
+			if ( tpl === null ) {
+				let _node = node.cloneNode(true);
 
-			render_node(_node, item);
+				render_node(_node, item);
 
-			node_list.appendChild(_node);
+				node_list.appendChild(_node);
+			} else if ( item.tpl !== undefined ) {
+				node_list_array(node.children)
+					.some(node => {
+						if ( node.dataset.tplRel === item.tpl ) {
+							let _node = node.cloneNode(true);
+
+							render_node(_node, item);
+
+							node_list.appendChild(_node);
+
+							return true;
+						}
+					});
+			}
 		});
 
-		node.parentNode.replaceChild(node_list, node);
+		if ( tpl === null ) {
+			node.parentNode.replaceChild(node_list, node);
+		} else {
+			if ( tpl.nextSibling === undefined ) {
+				tpl.parentNode.appendChild(node_list);
+			} else {
+				tpl.parentNode.insertBefore(node_list, tpl.nextSibling);
+			}
+		}
 	}
 }
 
