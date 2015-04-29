@@ -19,13 +19,13 @@ export default function(tpl, data) {
 
 	node_list_array(node.children)
 		.forEach(node => {
-			for ( let name in data ) {
-				if ( node.dataset.tplRel === name ) {
-					if ( Array.isArray(data[name]) ) {
-						render_list(node, data[name]);
-					} else {
-						render_node(node, data[name]);
-					}
+			let name = node.dataset.tplRel;
+
+			if ( data.hasOwnProperty(name) ) {
+				if ( Array.isArray(data[name]) ) {
+					render_list(node, data[name]);
+				} else {
+					render_node(node, data[name]);
 				}
 			}
 		});
@@ -50,13 +50,14 @@ function render_node(node, data) {
 		} else {
 			set_attributes(node, data.value);
 
-			for ( let name in data.children ) {
-				if ( Array.isArray(data.children[name]) ) {
-					render_list(node.querySelector(':scope > [data-tpl-rel="' + name + '"]'), data.children[name]);
-				} else {
-					render_node(node.querySelector(':scope > [data-tpl-rel="' + name + '"]'), data.children[name]);
-				}
-			}
+			Object.keys(data.children)
+				.forEach(name => {
+					if ( Array.isArray(data.children[name]) ) {
+						render_list(node.querySelector(':scope > [data-tpl-rel="' + name + '"]'), data.children[name]);
+					} else {
+						render_node(node.querySelector(':scope > [data-tpl-rel="' + name + '"]'), data.children[name]);
+					}
+				});
 		}
 
 		if ( tpl !== null ) {
