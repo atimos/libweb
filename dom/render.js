@@ -90,7 +90,7 @@ function render_list(node, data) {
 			} else if ( item.tpl !== undefined ) {
 				node_list_array(node.children)
 					.some(node => {
-						if ( node.dataset.tplRel === item.tpl ) {
+						if ( node.dataset.tpl === item.tpl ) {
 							let _node = node.cloneNode(true);
 
 							render_node(_node, item);
