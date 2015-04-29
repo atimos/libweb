@@ -87,7 +87,7 @@ function set_attributes(node, data) {
 					break;
 			}
 
-			node.setAttribute(attr_name, parse_attribute(attr_name, value, node));
+			node.setAttribute(attr_name, secure_attribute(attr_name, value, node));
 		});
 
 		delete node.dataset.tplAttr;
@@ -115,22 +115,19 @@ function set_value(node, value) {
 	tmp.removeChild(tmp.children[0]);
 }
 
-function parse_attribute(name, value, node) {
-	let events = Object.getOwnPropertyNames(node)
+function secure_attribute(name, value, node) {
+	value = value.toString();
+
+	let matched_events = Object.getOwnPropertyNames(node)
 		.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(Object.getPrototypeOf(node))))
 		.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(node)))
 		.filter(function(attribute){
-			return attribute.indexOf('on') === 0 && (node[attribute] === null || typeof node[attribute] === 'function');
-		})
-		.filter(function(attribute, index, list){
-			return list.indexOf(attribute) == index && attribute === name;
+			return attribute.indexOf('on') === 0 &&
+				(node[attribute] === null || typeof node[attribute] === 'function') &&
+				attribute.toLowerCase() === name.toLowerCase();
 		});
-
-		if ( events.length > 0 ) {
-			return '';
-		}
 	
-	if ( value.toString().match(/^javascript:/i) !== null ) {
+	if ( matched_events.length > 0 || value.match(/^javascript:/i) !== null ) {
 		return '';
 	}
 
