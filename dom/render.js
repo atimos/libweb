@@ -34,7 +34,7 @@ function render_node(node, data) {
 	if ( node !== null ) {
 		let tpl = null;
 
-		if ( node.nodeName === 'TEMPLATE' ) {
+		if ( node.nodeName.toLowerCase() === 'template' ) {
 			tpl = node;
 			node = node.content.cloneNode(true);
 		}
