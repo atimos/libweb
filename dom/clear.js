@@ -1,15 +1,16 @@
 'use strict';
 
-import {array as dom_array} from './collection';
+import {selector as selector_, node_list} from './collection';
 
 export function node(node) {
-	Array.prototype.forEach.call(node.childNodes, child => {
-		node.parentNode.removeChild(child);
-	});
+	node_list(node.childNodes)
+		.forEach(child => {
+			node.parentNode.removeChild(child);
+		});
 }
 
-export function selector(selector, parent = window.document) {
-	dom_array(selector, parent)
+export function selector(query, parent = window.document) {
+	selector_(query, parent)
 		.forEach(node => {
 			node.parentNode.removeChild(node);
 		});
