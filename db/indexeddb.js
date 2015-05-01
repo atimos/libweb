@@ -213,13 +213,11 @@ class Range {
 
 	cursor(fn, direction = 'next') {
 		return new Promise((resolve, reject) => {
-			let result = [];
-
-			add_transaction_handler(this[_trans], reject, resolve, result);
+			add_transaction_handler(this[_trans], reject, resolve);
 
 			this[_store].openCursor(this[_range], direction)
 				.addEventListener('success', evt => {
-					fn(evt.target.result || null, result);
+					fn(evt.target.result || null);
 				});
 		});
 	}
@@ -236,12 +234,17 @@ class Range {
 	}
 
 	then(resolve, reject) {
+		let result = [];
+
 		return this
-			.cursor((cursor, result) => {
+			.cursor(cursor => {
 				if ( cursor !== null ) {
 					result.push(cursor.value);
 					cursor.continue();
 				}
+			})
+			.then(() => {
+				return result;
 			})
 			.then(resolve, reject);
 	}

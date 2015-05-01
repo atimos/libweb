@@ -1,8 +1,8 @@
 'use strict';
 
-import {array as dom_array} from '../../dom/collection';
-import {selector as dom_clear_selector} from '../../dom/clear';
-import {node as render_node} from '../../dom/render';
+import {selector as clear_selector} from '../../dom/clear';
+import {selector as collection_selector} from '../../dom/collection';
+import render_tpl from '../../dom/render';
 
 let _items = Symbol('options'),
 	_groups = Symbol('groups'),
@@ -112,54 +112,40 @@ function keydown_event(evt) {
 }
 
 function render(dl) {
-	let fragment, group_tpl, option_tpl;
-	
+	let fragment, tpl;
+
 	if ( dl[_items].length === 0 ) {
-		return dom_clear_selector(':scope > *:not(template)', dl);
+		return clear_selector(':scope > *:not(template)', dl);
 	}
 
-	fragment = document.createDocumentFragment();
-	group_tpl = dl.querySelector(':scope > template');
+	tpl = dl.querySelector(':scope > template');
 
-	if ( group_tpl === undefined ) {
-		group_tpl = self_document.querySelector(':scope > template').content.children[0].cloneNode(true);
-	} else {
-		group_tpl = group_tpl.content.children[0].cloneNode(true);
+	if ( tpl === null ) {
+		tpl = self_document.querySelector(':scope > template');
 	}
 
-	if ( group_tpl.nodeName === 'OPTGROUP' ) {
-		option_tpl = group_tpl.removeChild(group_tpl.children[0]);
-	} else {
-		option_tpl = group_tpl;
-		group_tpl = document.createElement('optgroup');
-	}
+	fragment = render_tpl(tpl, {
+		group: dl[_groups]
+			.map(group => {
+				return {
+					value: group.value,
+					children: {option: group.options
+						.map(option => {
+							if ( option.type !== undefined ) {
+								let type = option.type;
+								delete option.type;
 
-	dl[_groups]
-		.forEach(item => {
-			let group = group_tpl.cloneNode(true);
+								return {tpl: type, value: option};
+							}
 
-			if ( Array.isArray(item.options) ) {
-				render_node(group, item.value);
+							return {value: option};
+						})
+					}
+				};
+			})
+	});
 
-				item.options.forEach(item => {
-					let option = option_tpl.cloneNode(true);
-
-					render_node(option, item);
-
-					group.appendChild(option);
-				});
-
-				fragment.appendChild(group);
-			} else {
-				let option = option_tpl.cloneNode(true);
-
-				render_node(option, item.value);
-
-				fragment.appendChild(option);
-			}
-		});
-
-	dom_clear_selector(':scope > *:not(template)', dl);
+	clear_selector(':scope > *:not(template)', dl);
 
 	dl.appendChild(fragment);
 
@@ -167,7 +153,7 @@ function render(dl) {
 }
 
 function select_option(dl) {
-	dom_array(':scope option', dl)
+	collection_selector(':scope option', dl)
 		.forEach((node, index) => {
 			if ( index === dl[_pos] ) {
 				node.classList.add('selected');

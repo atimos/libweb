@@ -104,10 +104,24 @@ class Store {
 	range(...args) {
 		return this[_db].get(this[_name])
 			.then(store => {
-				return store.range(...args);
-			})
-			.then(result => {
-				return Stream(result);
+				let range = store.range(...args);
+
+				range.then = (resolve, reject) => {
+					let result = [];
+
+					return range
+						.cursor(cursor => {
+							if ( cursor !== null ) {
+								result.push(cursor.value);
+								cursor.continue();
+							}
+						})
+						.then(() => {
+							return Stream(result);
+						})
+						.then(resolve, reject);
+				};
+				return range;
 			});
 	}
 
