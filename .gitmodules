@@ -10,3 +10,7 @@
 	path = lib/streamjs
 	url = https://github.com/winterbe/streamjs.git
 	branch = master
+[submodule "lib/node-uuid"]
+	path = lib/node-uuid
+	url = https://github.com/broofa/node-uuid.git
+	branch = master

@@ -1,17 +1,34 @@
 'use strict';
 
-let Promise = require('../lib/bluebird/bluebird.js');
+let uuid = require('../lib/node-uuid/uuid.js', 'min'),
+	Promise = require('../lib/bluebird/bluebird.js');
 
 let _store = Symbol('store'),
 	_trans = Symbol('trans'),
 	_index = Symbol('index'),
-	_range = Symbol('range');
+	_range = Symbol('range'),
+	_cfg = Symbol('config');
 
 export default function(name, version) {
 	let config_map = new Map();
 
 	return {
 		set: function(name, config) {
+			if ( config.key_gen === 'increment' ) {
+				config.autoIncrement = true;
+				delete config.key_gen;
+			} else if ( config.key_gen === 'uuid' ) {
+				config.key_gen = uuid.v4;
+			} else if ( typeof config.key_gen !== 'function' ) {
+				delete config.key_gen;
+			}
+
+			if ( config.key ) {
+				config.keyPath = config.key;
+			}
+
+			delete config.key;
+
 			config_map.set(name, config);
 			return this;
 		},
@@ -27,15 +44,15 @@ export default function(name, version) {
 
 				request.addEventListener('upgradeneeded', evt => {
 					for ( let entry of config_map.entries() ) {
-						let [name, options] = entry,
-							index = options.index || [],
-							store = null;
+						let [name, config] = entry,
+							index = config.index || [],
+							store = null; 
 
 						if ( evt.target.result.objectStoreNames.contains(name) ) {
 							evt.target.result.deleteObjectStore(name);
 						}
 
-						store = evt.target.result.createObjectStore(name, options);
+						store = evt.target.result.createObjectStore(name, config);
 
 						index
 							.forEach(config => {
@@ -58,12 +75,12 @@ export default function(name, version) {
 
 									store_list
 										.forEach(name => {
-											store_map.set(name, new Store(transaction.objectStore(name)));
+											store_map.set(name, new Store(transaction.objectStore(name), config_map.get(name)));
 										});
 
 									resolve(store_map);
 								} else {
-									resolve(new Store(transaction.objectStore(store_list)));
+									resolve(new Store(transaction.objectStore(store_list), config_map.get(store_list)));
 								}
 							});
 						},
@@ -91,8 +108,9 @@ export default function(name, version) {
 }
 
 class Store {
-	constructor(store) {
+	constructor(store, config) {
 		this[_store] = store;
+		this[_cfg] = config;
 	}
 
 	index(name) {
@@ -114,16 +132,16 @@ class Store {
 		return new Range(this[_store].transaction, this[_store], ...args);
 	}
 
-	add(items) {
-		return update_store(this[_store], 'add', items);
+	add(...args) {
+		return update_store.call(this, 'add', ...args);
 	}
 
-	put(items) {
-		return update_store(this[_store], 'put', items);
+	put(...args) {
+		return update_store.call(this, 'put', ...args);
 	}
 
-	delete(key_list) {
-		return update_store(this[_store], 'delete', key_list);
+	delete(...args) {
+		return update_store.call(this, 'delete', ...args);
 	}
 
 	clear() {
@@ -244,40 +262,69 @@ class IndexRange extends Range {
 	}
 }
 
-function update_store(store, action, items) {
+function update_store(action, items, key = undefined) {
 	return new Promise((resolve, reject) => {
-		let result;
+		let result, key_path = this[_cfg].keyPath, key_gen = this[_cfg].key_gen;
 
 		if ( Array.isArray(items) ) {
 			result = [];
-			add_transaction_handler(store.transaction, reject, resolve, result);
+			add_transaction_handler(this[_store].transaction, reject, resolve, result);
 		} else {
 			result = null;
-			add_transaction_handler(store.transaction, reject);
+			add_transaction_handler(this[_store].transaction, reject);
 		}
 
 		if ( Array.isArray(items) ) {
 			if ( action === 'delete' ) {
 				items.forEach(key => {
-					store[action](key).addEventListener('success', () => {
+					this[_store][action](key).addEventListener('success', () => {
 						result.push(key);
 					});
 				});
 			} else {
 				items.forEach(item => {
-					store[action](item).addEventListener('success', evt => {
+					let key, value;
+
+					if ( key_path === undefined ) {
+						key = item.key;
+						value = item.value;
+					} else {
+						value = item;
+					}
+
+					if ( key_gen !== undefined ) {
+						if ( key_path !== undefined && value[key_path] === undefined ) {
+							value[key_path] = key_gen(value);
+						} else if ( key_path === undefined && key === undefined ) {
+							key = key_gen(value);
+						}
+					}
+
+					this[_store][action](value, key).addEventListener('success', evt => {
 						item[evt.target.source.keyPath] = evt.target.result;
 						result.push(item);
 					});
 				});
 			}
 		} else {
-			store[action](items).addEventListener('success', evt => {
-				if ( action !== 'delete' ) {
-					items[evt.target.source.keyPath] = evt.target.result;
+			if ( action === 'delete' ) {
+				this[_store][action](items).addEventListener('success', () => {
+					resolve(items);
+				});
+			} else {
+				if ( key_gen !== undefined ) {
+					if ( key_path !== undefined && items[key_path] === undefined ) {
+						items[key_path] = key_gen(items);
+					} else if ( key_path === undefined && key === undefined ) {
+						key = key_gen(items);
+					}
 				}
-				resolve(items);
-			});
+
+				this[_store][action](items, key).addEventListener('success', evt => {
+					items[evt.target.source.keyPath] = evt.target.result;
+					resolve(items);
+				});
+			}
 		}
 	});
 }
