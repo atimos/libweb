@@ -277,35 +277,51 @@ function update_store(action, items, key = undefined) {
 
 		if ( Array.isArray(items) ) {
 			if ( action === 'delete' ) {
-				items.forEach(key => {
-					this[_store][action](key).addEventListener('success', () => {
-						result.push(key);
+				items
+					.forEach(key => {
+						this[_store][action](key).addEventListener('success', () => {
+							result.push(key);
+						});
 					});
-				});
-			} else {
-				items.forEach(item => {
-					let key, value;
+			} else if ( key_path === undefined && key_gen === undefined ) {
+				items
+					.forEach(item => {
+						this[_store][action](item.value, item.key).addEventListener('success', evt => {
+							resolve({key: evt.target.result, value: item.value});
+						});
+					});
+			} else if ( key_path === undefined && key_gen !== undefined ) {
+				items
+					.forEach(item => {
 
-					if ( key_path === undefined ) {
-						key = item.key;
-						value = item.value;
-					} else {
-						value = item;
-					}
-
-					if ( key_gen !== undefined ) {
-						if ( key_path !== undefined && value[key_path] === undefined ) {
-							value[key_path] = key_gen(value);
-						} else if ( key_path === undefined && key === undefined ) {
-							key = key_gen(value);
+						if ( item.key === undefined ) {
+							item.key = key_gen(item.value);
 						}
-					}
 
-					this[_store][action](value, key).addEventListener('success', evt => {
-						item[evt.target.source.keyPath] = evt.target.result;
-						result.push(item);
+						this[_store][action](item.value, item.key).addEventListener('success', evt => {
+							resolve({key: evt.target.result, value: item.value});
+						});
 					});
-				});
+			} else if ( key_path !== undefined && key_gen === undefined ) {
+				items
+					.forEach(item => {
+						this[_store][action](item).addEventListener('success', evt => {
+							item[evt.target.source.keyPath] = evt.target.result;
+							result.push(item);
+						});
+					});
+			} else if ( key_path !== undefined && key_gen !== undefined ) {
+				items
+					.forEach(item => {
+						if ( item[key_path] === undefined ) {
+							item[key_path] = key_gen(item);
+						}
+
+						this[_store][action](item).addEventListener('success', evt => {
+							item[evt.target.source.keyPath] = evt.target.result;
+							result.push(item);
+						});
+					});
 			}
 		} else {
 			if ( action === 'delete' ) {
@@ -313,18 +329,24 @@ function update_store(action, items, key = undefined) {
 					resolve(items);
 				});
 			} else {
-				if ( key_gen !== undefined ) {
-					if ( key_path !== undefined && items[key_path] === undefined ) {
-						items[key_path] = key_gen(items);
-					} else if ( key_path === undefined && key === undefined ) {
+				if ( key_path === undefined ) {
+					if ( key === undefined && key_gen !== undefined ) {
 						key = key_gen(items);
 					}
-				}
 
-				this[_store][action](items, key).addEventListener('success', evt => {
-					items[evt.target.source.keyPath] = evt.target.result;
-					resolve(items);
-				});
+					this[_store][action](items, key).addEventListener('success', evt => {
+						resolve({key: evt.target.result, value: items});
+					});
+				} else {
+					if ( items[key_path] === undefined && key_gen !== undefined ) {
+						items[key_path] = key_gen(items);
+					}
+
+					this[_store][action](items).addEventListener('success', evt => {
+						items[evt.target.source.keyPath] = evt.target.result;
+						resolve(items);
+					});
+				}
 			}
 		}
 	});
