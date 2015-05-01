@@ -253,13 +253,11 @@ class Range {
 class IndexRange extends Range {
 	keyCursor(fn, direction = 'next') {
 		return new Promise((resolve, reject) => {
-			let result = [];
-
-			add_transaction_handler(this[_trans], reject, resolve, result);
+			add_transaction_handler(this[_trans], reject, resolve);
 
 			this[_store].openKeyCursor(this[_range], direction)
 				.addEventListener('success', evt => {
-					fn(evt.target.result || null, result);
+					fn(evt.target.result || null);
 				});
 		});
 	}
