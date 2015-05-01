@@ -101,6 +101,7 @@ class Store {
 			});
 	}
 
+	//FIXME: how do I wrap range, index and index->range?
 	range(...args) {
 		return this[_db].get(this[_name])
 			.then(store => {
