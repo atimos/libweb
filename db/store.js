@@ -101,29 +101,76 @@ class Store {
 			});
 	}
 
-	//FIXME: how do I wrap range, index and index->range?
 	range(...args) {
-		return this[_db].get(this[_name])
-			.then(store => {
-				let range = store.range(...args);
+		return {
+			cursor: (...args) => {
+				return this[_db].get(this[_name])
+					.then(store => {
+						return store.range().cursor(...args);
+					});
+			},
+			count: () => {
+				return this[_db].get(this[_name])
+					.then(store => {
+						return store.range().count();
+					});
+			},
+			then: (...args) => {
+				return this[_db].get(this[_name])
+					.then(store => {
+						return store;
+					}).then(result => {
+						return Stream(result);
+					}).then(...args);
+			}
+		};
+	}
 
-				range.then = (resolve, reject) => {
-					let result = [];
-
-					return range
-						.cursor(cursor => {
-							if ( cursor !== null ) {
-								result.push(cursor.value);
-								cursor.continue();
-							}
-						})
-						.then(() => {
-							return Stream(result);
-						})
-						.then(resolve, reject);
+	index(...args_index) {
+		return {
+			get: (...args) => {
+				return this[_db].get(this[_name])
+					.then(store => {
+						return store.index(...args_index).get(...args);
+					});
+			},
+			getKey: (...args) => {
+				return this[_db].get(this[_name])
+					.then(store => {
+						return store.index(...args_index).getKey(...args);
+					});
+			},
+			range: () => {
+				return {
+					keyCursor: (...args) => {
+						return this[_db].get(this[_name])
+							.then(store => {
+								return store.index(...args_index).range().keyCursor(...args);
+							});
+					},
+					cursor: (...args) => {
+						return this[_db].get(this[_name])
+							.then(store => {
+								return store.index(...args_index).range().cursor(...args);
+							});
+					},
+					count: () => {
+						return this[_db].get(this[_name])
+							.then(store => {
+								return store.index(...args_index).range().count();
+							});
+					},
+					then: (...args) => {
+						return this[_db].get(this[_name])
+							.then(store => {
+								return store.index(...args_index);
+							}).then(result => {
+								return Stream(result);
+							}).then(...args);
+					}
 				};
-				return range;
-			});
+			}
+		};
 	}
 
 	put(items) {
@@ -218,6 +265,12 @@ function update_store(action_type, store, items) {
 							return index.raw_get_data()
 								.then(data => {
 									return db.get(index_store_name, 'readwrite').delete(data.name);
+								})
+								.then(result => {
+									return index.clear()
+										.then(() => {
+											return result;
+										});
 								});
 						} else {
 							return index.raw_get_data()
