@@ -1,27 +1,22 @@
 'use strict';
 
 let _queue = Symbol('queue'),
-	_size = Symbol('size'),
 	_peek = Symbol('peek'),
 	_iter = Symbol('iter');
 
 export default class IterExt {
-	constructor(iterator, size = null) {
+	constructor(iterator) {
 		switch ( Object.prototype.toString.call(iterator) ) {
 			case '[object Array]':
-				this[_size] = iterator.length;
 				this[_iter] = iterator.entries();
 				break;
 			case '[object Map]':
-				this[_size] = iterator.size;
 				this[_iter] = iterator.entries();
 				break;
 			case '[object Set]':
-				this[_size] = iterator.size;
 				this[_iter] = iterator.entries();
 				break;
 			default:
-				this[_size] = size;
 				this[_iter] = iterator;
 		}
 
@@ -38,17 +33,13 @@ export default class IterExt {
 			let entry = this[_iter].next(...args);
 
 			if ( entry.done !== true ) {
-				this[_queue].forEach(action => {
+				for ( let action of this[_queue] ) {
 					entry = action(entry);
-				});
+				}
 			}
 
 			return entry;
 		}
-	}
-
-	count() {
-		return this[_size];
 	}
 
 	map(fn) {
@@ -101,12 +92,12 @@ export default class IterExt {
 
 	nth(n) {
 		for ( let entry of this ) {
-			if ( n === 0 ) {
-				return (entry===undefined?null:entry[1]);
-			}
-
 			if ( entry !== undefined ) {
-				n -= 1;
+				if ( n === 0 ) {
+					return entry[1];
+				} else {
+					n -= 1;
+				}
 			}
 		}
 
@@ -114,26 +105,22 @@ export default class IterExt {
 	}
 
 	skip(n = 1) {
-		for ( let entry of this ) {
-			if ( entry !== undefined ) {
+		this.filter(() => {
+			if ( n > 0 ) {
 				n -= 1;
+				return false;
+			} else {
+				return true;
 			}
-
-			if ( n === 0 ) {
-				break;
-			}
-
-		}
+		});
 
 		return this;
 	}
 
 	skip_while(fn) {
-		for ( let entry of this ) {
-			if ( entry !== undefined && fn(entry[1], entry[0]) !== true ) {
-				break;
-			}
-		}
+		this.filter((item, index) => {
+			return !fn(item, index);
+		});
 
 		return this;
 	}
