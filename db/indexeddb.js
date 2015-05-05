@@ -232,22 +232,6 @@ class Range {
 				});
 		});
 	}
-
-	then(resolve, reject) {
-		let result = [];
-
-		return this
-			.cursor(cursor => {
-				if ( cursor !== null ) {
-					result.push(cursor.value);
-					cursor.continue();
-				}
-			})
-			.then(() => {
-				return result;
-			})
-			.then(resolve, reject);
-	}
 }
 
 class IndexRange extends Range {
