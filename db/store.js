@@ -3,11 +3,15 @@
 import indexeddb from './indexeddb';
 import fulltext from './fulltext';
 
-let Promise = require('../lib/bluebird/bluebird.js');
-let Stream = require('../lib/streamjs/stream.js');
+let Promise = require('../lib/bluebird/bluebird.js'),
+	IterExt = require('../iterext/iterext');
 
 let _name = Symbol('name'),
 	_db = Symbol('db'),
+	_queue = Symbol('queue'),
+	_store = Symbol('store'),
+	_index_name = Symbol('index_name'),
+	_dir = Symbol('direction'),
 	_index_store_name = Symbol('idx_store_name'),
 	_index = Symbol('index');
 
@@ -94,34 +98,36 @@ class Store {
 			})
 			.then(result => {
 				if ( Array.isArray(result) ) {
-					return Stream(result);
+					return new IterExt(result);
 				}
 
 				return result;
 			});
 	}
 
-	range(...args) {
+	iter(direction = 'next') {
+		return new Iterator(this[_db].get(this[_name]), direction);
+	}
+
+	range(...range_args) {
 		return {
 			cursor: (...args) => {
 				return this[_db].get(this[_name])
 					.then(store => {
-						return store.range().cursor(...args);
+						return store.range(...range_args).cursor(...args);
 					});
 			},
 			count: () => {
 				return this[_db].get(this[_name])
 					.then(store => {
-						return store.range().count();
+						return store.range(...range_args).count();
 					});
 			},
-			then: (...args) => {
+			then: (resolve, reject) => {
 				return this[_db].get(this[_name])
 					.then(store => {
-						return store;
-					}).then(result => {
-						return Stream(result);
-					}).then(...args);
+						return range_get_all(store.range(...range_args));
+					}).then(resolve, reject);
 			}
 		};
 	}
@@ -140,33 +146,34 @@ class Store {
 						return store.index(...args_index).getKey(...args);
 					});
 			},
-			range: () => {
+			iter: (direction = 'next') => {
+				return new Iterator(this[_db].get(this[_name]), direction, ...args_index);
+			},
+			range: (...range_args) => {
 				return {
 					keyCursor: (...args) => {
 						return this[_db].get(this[_name])
 							.then(store => {
-								return store.index(...args_index).range().keyCursor(...args);
+								return store.index(...args_index).range(...range_args).keyCursor(...args);
 							});
 					},
 					cursor: (...args) => {
 						return this[_db].get(this[_name])
 							.then(store => {
-								return store.index(...args_index).range().cursor(...args);
+								return store.index(...args_index).range(...range_args).cursor(...args);
 							});
 					},
 					count: () => {
 						return this[_db].get(this[_name])
 							.then(store => {
-								return store.index(...args_index).range().count();
+								return store.index(...args_index).range(...range_args).count();
 							});
 					},
-					then: (...args) => {
+					then: (resolve, reject) => {
 						return this[_db].get(this[_name])
 							.then(store => {
-								return store.index(...args_index);
-							}).then(result => {
-								return Stream(result);
-							}).then(...args);
+								return range_get_all(store.index(...args_index).range(...range_args));
+							});
 					}
 				};
 			}
@@ -221,10 +228,10 @@ class Store {
 							.cursor(cursor => {
 								if ( cursor !== null ) {
 									let next_key = key_list.shift(),
-										item = result.get(cursor.key);
+										item = result.get(cursor.primaryKey);
 
 									if ( item !== undefined ) {
-										result.set(cursor.key, cursor.value);
+										result.set(cursor.primaryKey, cursor.value);
 									}
 
 									if ( next_key !== undefined ) {
@@ -233,17 +240,26 @@ class Store {
 								}
 							})
 							.then(() => {
-								let result_list = [];
-
-								for ( let item of result.values() ) {
-									result_list.push(item);
-								}
-
-								return Stream(result_list);
+								return new IterExt(result);
 							});
 					});
 			});
 	}
+}
+
+function range_get_all(range) {
+	let result = new Map();
+
+	return range
+		.cursor(cursor => {
+			if ( cursor !== null ) {
+				result.set(cursor.primaryKey, cursor.value);
+				cursor.continue();
+			}
+		})
+		.then(() => {
+			return new IterExt(result);
+		});
 }
 
 function update_store(action_type, store, items) {
@@ -288,9 +304,132 @@ function update_store(action_type, store, items) {
 		})
 		.then(result => {
 			if ( Array.isArray(result) ) {
-				return Stream(result);
+				return new IterExt(result);
 			}
 
 			return result;
 		});
+}
+
+class Iterator {
+	constructor(store, direction, index_name) {
+		this[_store] = store;
+		this[_index_name] = index_name;
+		this[_dir] = direction;
+		this[_queue] = [];
+	}
+
+	then(resolve, reject) {
+		return this[_store]
+			.then(store => {
+				let result = new Map();
+
+				if ( this[_index_name] !== undefined ) {
+					store = store.index(this[_index_name]);
+				}
+
+				return store.range()
+					.cursor(cursor => {
+						if ( cursor ) {
+							let entry = {key: cursor.primaryKey, value: cursor.value, done: false};
+
+							for ( let action of this[_queue] ) {
+								entry = action(entry);
+							}
+
+							if ( entry !== undefined && entry.done === false ) {
+								result.set(entry.key, entry.value);
+							}
+
+							if ( entry === undefined || entry.done === false ) {
+								cursor.continue();
+							}
+						}
+					}, this[_dir])
+					.then(() => {
+						return new IterExt(result);
+					});
+			}).then(resolve, reject);
+	}
+
+	map(fn) {
+		if ( Object.prototype.toString.call(fn) === '[object Function]' ) {
+			this[_queue].push(function(entry) {
+				if ( entry !== undefined ) {
+					entry.value = fn(entry.value, entry.key);
+				}
+
+				return entry;
+			});
+		} else {
+			this[_queue].push(function(entry) {
+				if ( entry !== undefined ) {
+					entry.value = entry.value[fn];
+				}
+
+				return entry;
+			});
+		}
+
+		return this;
+	}
+
+	filter(fn) {
+		this[_queue].push(function(entry) {
+			if ( entry !== undefined && fn(entry.value, entry.key) !== true ) {
+				entry = undefined;
+			}
+
+			return entry;
+		});
+
+		return this;
+	}
+
+	skip(n = 1) {
+		this.filter(() => {
+			if ( n > 0 ) {
+				n -= 1;
+				return false;
+			} else {
+				return true;
+			}
+		});
+
+		return this;
+	}
+
+	skip_while(fn) {
+		this.filter((item, index) => {
+			return !fn(item, index);
+		});
+
+		return this;
+	}
+
+	take(n) {
+		this.take_while(() => {
+			if ( n === 0 ) {
+				return false;
+			}
+
+			n -= 1;
+
+			return true;
+		});
+
+		return this;
+	}
+
+	take_while(fn) {
+		this[_queue].push(function(entry) {
+			if ( entry !== undefined && fn(entry.value, entry.key) !== true ) {
+				entry.done = true;
+			}
+
+			return entry;
+		});
+
+		return this;
+	}
 }
