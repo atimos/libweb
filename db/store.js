@@ -353,35 +353,65 @@ class Iterator {
 	}
 
 	map(fn) {
-		if ( Object.prototype.toString.call(fn) === '[object Function]' ) {
-			this[_queue].push(function(entry) {
+		this[_queue]
+			.push(entry => {
 				if ( entry !== undefined ) {
 					entry.value = fn(entry.value, entry.key);
 				}
 
 				return entry;
 			});
-		} else {
-			this[_queue].push(function(entry) {
-				if ( entry !== undefined ) {
-					entry.value = entry.value[fn];
-				}
-
-				return entry;
-			});
-		}
 
 		return this;
 	}
 
 	filter(fn) {
-		this[_queue].push(function(entry) {
-			if ( entry !== undefined && fn(entry.value, entry.key) !== true ) {
-				entry = undefined;
-			}
+		this[_queue]
+			.push(entry => {
+				if ( entry !== undefined && fn(entry.value, entry.key) !== true ) {
+					entry = undefined;
+				}
 
-			return entry;
-		});
+				return entry;
+			});
+
+		return this;
+	}
+
+	filter_map(fn) {
+		if ( Object.prototype.toString.call(fn) === '[object Function]' ) {
+			this[_queue].push(entry => {
+				if ( entry !== undefined ) {
+					entry.value = fn(entry.value, entry.key);
+
+					if ( entry.value === null ) {
+						entry = undefined;
+					}
+				}
+
+				return entry;
+			});
+		} else {
+			this[_queue].push(entry => {
+				if ( entry !== undefined ) {
+					if ( Object.prototype.toString.call(entry.value) === '[object Map]' ) {
+						if ( entry.value.has(fn) ) {
+							entry.value = entry.value.get(fn);
+						} else {
+							entry = undefined;
+						}
+					} else {
+						if ( entry.value.hasOwnProperty(fn) ) {
+							entry.value = entry.value[fn];
+						} else {
+							entry = undefined;
+						}
+					}
+				}
+
+				return entry;
+			});
+		}
 
 		return this;
 	}
@@ -422,13 +452,14 @@ class Iterator {
 	}
 
 	take_while(fn) {
-		this[_queue].push(function(entry) {
-			if ( entry !== undefined && fn(entry.value, entry.key) !== true ) {
-				entry.done = true;
-			}
+		this[_queue]
+			.push(entry => {
+				if ( entry !== undefined && fn(entry.value, entry.key) !== true ) {
+					entry.done = true;
+				}
 
-			return entry;
-		});
+				return entry;
+			});
 
 		return this;
 	}

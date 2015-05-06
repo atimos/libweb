@@ -43,39 +43,63 @@ export default class IterExt {
 	}
 
 	map(fn) {
-		if ( Object.prototype.toString.call(fn) === '[object Function]' ) {
-			this[_queue].push(function(entry) {
-				if ( entry.value !== undefined ) {
-					entry.value[1] = fn(entry.value[1], entry.value[0]);
-				}
+		this[_queue].push(entry => {
+			if ( entry.value !== undefined ) {
+				entry.value[1] = fn(entry.value[1], entry.value[0]);
+			}
 
-				return entry;
-			});
-		} else {
-			this[_queue].push(function(entry) {
-				if ( entry.value !== undefined ) {
-					if ( Object.prototype.toString.call(entry.value[1]) === '[object Map]' ) {
-						entry.value[1] = entry.value[1].get(fn);
-					} else {
-						entry.value[1] = entry.value[1][fn];
-					}
-				}
-
-				return entry;
-			});
-		}
+			return entry;
+		});
 
 		return this;
 	}
 
 	filter(fn) {
-		this[_queue].push(function(entry) {
+		this[_queue].push(entry => {
 			if ( entry.value !== undefined && fn(entry.value[1], entry.value[0]) !== true ) {
 				entry.value = undefined;
 			}
 
 			return entry;
 		});
+
+		return this;
+	}
+
+	filter_map(fn) {
+		if ( Object.prototype.toString.call(fn) === '[object Function]' ) {
+			this[_queue].push(entry => {
+				if ( entry.value !== undefined ) {
+					entry.value[1] = fn(entry.value[1], entry.value[0]);
+
+					if ( entry.value[1] === null ) {
+						entry.value = undefined;
+					}
+				}
+
+				return entry;
+			});
+		} else {
+			this[_queue].push(entry => {
+				if ( entry.value !== undefined ) {
+					if ( Object.prototype.toString.call(entry.value[1]) === '[object Map]' ) {
+						if ( entry.value[1].has(fn) ) {
+							entry.value[1] = entry.value[1].get(fn);
+						} else {
+							entry.value = undefined;
+						}
+					} else {
+						if ( entry.value[1].hasOwnProperty(fn) ) {
+							entry.value[1] = entry.value[1][fn];
+						} else {
+							entry.value = undefined;
+						}
+					}
+				}
+
+				return entry;
+			});
+		}
 
 		return this;
 	}
