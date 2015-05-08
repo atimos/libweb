@@ -203,6 +203,18 @@ export default class IterExt {
 		return new IterExt(slice);
 	}
 
+	collect() {
+		let slice = [];
+
+		for ( let entry of this ) {
+			if ( entry !== undefined ) {
+				slice.push(entry[1]);
+			}
+		}
+
+		return new IterExt(slice);
+	}
+
 	fold(result, fn) {
 		for ( let entry of this ) {
 			if ( entry !== undefined ) {
