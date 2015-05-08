@@ -19,10 +19,10 @@ class LwDataList extends window.HTMLDataListElement {
 				if ( Array.isArray(group.options) ) {
 					return group.options
 						.map(option => {
-							return {value: option, group: group.value, [_group_index]: group_index};
+							return {tpl: option.tpl, value: option, group: group.value, [_group_index]: group_index};
 						});
 				}
-				return {value: group, group: null, [_group_index]: group_index};
+				return {tpl: option.tpl, value: group, group: null, [_group_index]: group_index};
 			})
 			.reduce((options, option) => {
 				if ( Array.isArray(option) ) {
@@ -131,11 +131,11 @@ function render(dl) {
 					value: group.value,
 					children: {option: group.options
 						.map(option => {
-							if ( option.type !== undefined ) {
-								let type = option.type;
-								delete option.type;
+							if ( option.tpl !== undefined ) {
+								let tpl = option.tpl;
+								delete option.tpl;
 
-								return {tpl: type, value: option};
+								return {tpl: tpl, value: option};
 							}
 
 							return {value: option};
