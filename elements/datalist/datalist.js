@@ -12,6 +12,8 @@ let _items = Symbol('options'),
 
 class LwDataList extends window.HTMLDataListElement {
 	set options(groups) {
+		reset(this);
+
 		this[_groups] = groups;
 
 		this[_items] = this[_groups]
@@ -93,19 +95,19 @@ class LwDataList extends window.HTMLDataListElement {
 }
 
 function keydown_event(evt) {
-	let key = evt.keyCode, shift_key = evt.shiftKey, dl = this;
+	let key = evt.key, dl = this;
 
-	if ( key === 37 || ( key === 9 && shift_key ) ) {
-		dl.previous_group();
-	} else if ( key === 39 || ( key === 9 && !shift_key ) ) {
-		dl.next_group();
-	} else if ( key === 38 ) {
+	if ( key === 'ArrowLeft' || ( evt.keyCode === 9 && evt.shiftKey ) ) {
 		dl.previous();
-	} else if ( key === 40 ) {
+	} else if ( key === 'ArrowRight' || key === 'Tab' ) {
 		dl.next();
-	} else if ( key === 27 ) {
+	} else if ( key === 'ArrowUp' ) {
+		dl.previous_group();
+	} else if ( key === 'ArrowDown' ) {
+		dl.next_group();
+	} else if ( key === 'Escape' ) {
 		reset(dl);
-	} else if ( key === 13 && dl.value !== undefined ) {
+	} else if ( key === 'Enter' && dl.value !== undefined ) {
 		dl.dispatchEvent(new CustomEvent('select', {detail:dl.value}));
 		reset(dl);
 	}
@@ -172,6 +174,10 @@ function reset(dl) {
 
 function next_group(dl, direction) {
 	let pos = 0, group_index = dl.value[_group_index] + direction;
+
+	if ( group_index < 0 ) {
+		return 0;
+	}
 
 	dl[_groups]
 		.some((group, index) => {
