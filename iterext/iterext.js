@@ -2,26 +2,36 @@
 
 let _queue = Symbol('queue'),
 	_peek = Symbol('peek'),
+	_len = Symbol('length'),
 	_iter = Symbol('iter');
 
 export default class IterExt {
 	constructor(iterator) {
+
 		switch ( Object.prototype.toString.call(iterator) ) {
 			case '[object Array]':
+				this[_len] = iterator.length;
 				this[_iter] = iterator.entries();
 				break;
 			case '[object Map]':
+				this[_len] = iterator.size;
 				this[_iter] = iterator.entries();
 				break;
 			case '[object Set]':
+				this[_len] = iterator.size;
 				this[_iter] = iterator.entries();
 				break;
 			default:
+				this[_len] = null;
 				this[_iter] = iterator;
 		}
 
 		this[_peek] = null;
 		this[_queue] = [];
+	}
+
+	get length() {
+		return this[_len];
 	}
 
 	next(...args) {
