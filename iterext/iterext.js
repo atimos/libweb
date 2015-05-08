@@ -38,6 +38,11 @@ export default class IterExt {
 		if ( this[_peek] !== null ) {
 			let entry = this[_peek];
 			this[_peek] = null;
+
+			if ( this[_len] !== null ) {
+				this[_len] -= 1;
+			}
+
 			return entry;
 		} else {
 			let entry = this[_iter].next(...args);
@@ -46,6 +51,10 @@ export default class IterExt {
 				for ( let action of this[_queue] ) {
 					entry = action(entry);
 				}
+			}
+
+			if ( this[_len] !== null ) {
+				this[_len] -= 1;
 			}
 
 			return entry;
