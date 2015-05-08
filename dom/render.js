@@ -42,8 +42,6 @@ function render_node(node, data) {
 			node = node.content.cloneNode(true);
 		}
 
-		delete node.dataset.tplRel;
-
 		if ( data.children === undefined ) {
 			set_attributes_all(node, data.value);
 			set_value(node, data.value);
@@ -59,6 +57,8 @@ function render_node(node, data) {
 					}
 				});
 		}
+
+		delete node.dataset.tplRel;
 
 		if ( tpl !== null ) {
 			if ( tpl.nextSibling === undefined ) {
@@ -90,7 +90,7 @@ function render_list(node, data) {
 			} else if ( item.tpl !== undefined ) {
 				node_list_array(node.children)
 					.some(node => {
-						if ( node.dataset.tpl === item.tpl ) {
+						if ( node.dataset.tplRel === item.tpl ) {
 							let _node = node.cloneNode(true);
 
 							render_node(_node, item);
