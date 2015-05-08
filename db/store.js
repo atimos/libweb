@@ -2,9 +2,9 @@
 
 import indexeddb from './indexeddb';
 import fulltext from './fulltext';
+import IterExt from '../iterext/iterext';
 
 let Promise = require('../lib/bluebird/bluebird.js'),
-	IterExt = require('../iterext/iterext');
 
 let _name = Symbol('name'),
 	_db = Symbol('db'),
