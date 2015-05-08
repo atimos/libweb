@@ -207,7 +207,7 @@ class Store {
 					last_key;
 
 				if ( result.length === 0 ) {
-					return [];
+					return new IterExt([]);
 				}
 
 				result = result
