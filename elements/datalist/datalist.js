@@ -12,7 +12,7 @@ let _items = Symbol('options'),
 
 class LwDataList extends window.HTMLDataListElement {
 	set options(groups) {
-		reset(this);
+		clear(this);
 
 		this[_groups] = groups;
 
@@ -52,13 +52,21 @@ class LwDataList extends window.HTMLDataListElement {
 		return this[_items][this[_pos]];
 	}
 
+	get length() {
+		return this[_items].length;
+	}
+
 	createdCallback() {
-		reset(this);
+		clear(this);
 		this.addEventListener('keydown', keydown_event.bind(this));
 	}
 
 	attachedCallback() {
 		render(this);
+	}
+
+	clear() {
+		clear(this);
 	}
 
 	next() {
@@ -106,10 +114,10 @@ function keydown_event(evt) {
 	} else if ( key === 'ArrowDown' ) {
 		dl.next_group();
 	} else if ( key === 'Escape' ) {
-		reset(dl);
+		clear(dl);
 	} else if ( key === 'Enter' && dl.value !== undefined ) {
 		dl.dispatchEvent(new CustomEvent('select', {detail:dl.value}));
-		reset(dl);
+		clear(dl);
 	}
 }
 
@@ -150,8 +158,6 @@ function render(dl) {
 	clear_selector(':scope > *:not(template)', dl);
 
 	dl.appendChild(fragment);
-
-	select_option(dl);
 }
 
 function select_option(dl) {
@@ -165,15 +171,21 @@ function select_option(dl) {
 		});
 }
 
-function reset(dl) {
-	dl[_pos] = 0;
+function clear(dl) {
+	dl[_pos] = -1;
 	dl[_items] = [];
 	dl[_groups] = [];
 	render(dl);
 }
 
 function next_group(dl, direction) {
-	let pos = 0, group_index = dl.value[_group_index] + direction;
+	let pos = 0, group_index;
+
+	if ( dl.value === undefined ) {
+		return 0;
+	}
+
+	group_index = dl.value[_group_index] + direction;
 
 	if ( group_index < 0 ) {
 		return 0;
