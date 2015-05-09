@@ -15,7 +15,7 @@ let _name = Symbol('name'),
 	_index_store_name = Symbol('idx_store_name'),
 	_index = Symbol('index');
 
-let search_score = Symbol('search_score');
+export const SEARCH_SCORE = Symbol('search_score');
 
 export default function(db_name, index_store_name, version) {
 	let index = fulltext(),
@@ -77,7 +77,6 @@ export default function(db_name, index_store_name, version) {
 								return new Store(db, index, store_list, index_store_name);
 							}
 						},
-						search_score: search_score,
 						raw_index: index,
 						raw_db: db
 					};
@@ -234,7 +233,7 @@ class Store {
 										score = result.get(cursor.primaryKey);
 
 									if ( score !== undefined ) {
-										cursor.value[search_score] = score;
+										cursor.value[SEARCH_SCORE] = score;
 										result.set(cursor.primaryKey, cursor.value);
 									}
 
