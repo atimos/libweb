@@ -116,14 +116,13 @@ function render_list(node, data) {
 }
 
 function set_attributes_all(node, attr) {
-	let tmp = document.createDocumentFragment();
-	tmp.appendChild(node);
+	if ( node.dataset.tplAttr !== undefined ) {
+		set_attributes(node, attr);
+	}
 
-	Array.prototype.forEach.call(tmp.querySelectorAll('[data-tpl-attr]'), node => {
+	Array.prototype.forEach.call(node.querySelectorAll('[data-tpl-attr]'), node => {
 		set_attributes(node, attr);
 	});
-
-	tmp.removeChild(tmp.children[0]);
 }
 
 function set_attributes(node, data) {
@@ -147,7 +146,11 @@ function set_attributes(node, data) {
 			value = value.toString();
 
 			if ( events.indexOf(name.toLowerCase()) === -1 && value.match(/^javascript:/i) === null ) {
-				node.setAttribute(attr_name, value);
+				if ( attr_name === 'value' && node.nodeName === 'TEXTAREA' ) {
+					node[attr_name] = value;
+				} else {
+					node.setAttribute(attr_name, value);
+				}
 			}
 		});
 
@@ -156,10 +159,12 @@ function set_attributes(node, data) {
 }
 
 function set_value(node, value) {
-	let tmp = document.createDocumentFragment();
-	tmp.appendChild(node);
+	if ( node.dataset.tplVal !== undefined ) {
+		set_attributes(node, value);
+		delete node.dataset.tplVal;
+	}
 
-	Array.prototype.forEach.call(tmp.querySelectorAll('[data-tpl-val]'), node => {
+	Array.prototype.forEach.call(node.querySelectorAll('[data-tpl-val]'), node => {
 		node.dataset.tplVal.split('|')
 			.some(content => {
 				content = content.trim();
@@ -172,6 +177,4 @@ function set_value(node, value) {
 
 		delete node.dataset.tplVal;
 	});
-
-	tmp.removeChild(tmp.children[0]);
 }
