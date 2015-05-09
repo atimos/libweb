@@ -15,6 +15,8 @@ let _name = Symbol('name'),
 	_index_store_name = Symbol('idx_store_name'),
 	_index = Symbol('index');
 
+let search_score = Symbol('search_score');
+
 export default function(db_name, index_store_name, version) {
 	let index = fulltext(),
 		db = indexeddb(db_name, version);
@@ -75,6 +77,7 @@ export default function(db_name, index_store_name, version) {
 								return new Store(db, index, store_list, index_store_name);
 							}
 						},
+						search_score: search_score,
 						raw_index: index,
 						raw_db: db
 					};
@@ -212,7 +215,7 @@ class Store {
 
 				result = result
 					.reduce((map, item) => {
-						map.set(item.ref, null);
+						map.set(item.ref, item.score);
 						key_list.push(item.ref);
 
 						return map;
@@ -228,9 +231,10 @@ class Store {
 							.cursor(cursor => {
 								if ( cursor !== null ) {
 									let next_key = key_list.shift(),
-										item = result.get(cursor.primaryKey);
+										score = result.get(cursor.primaryKey);
 
-									if ( item !== undefined ) {
+									if ( score !== undefined ) {
+										cursor.value[search_score] = score;
 										result.set(cursor.primaryKey, cursor.value);
 									}
 
