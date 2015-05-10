@@ -97,13 +97,6 @@ class Store {
 		return this[_db].get(this[_name])
 			.then(store => {
 				return store.get(...args);
-			})
-			.then(result => {
-				if ( Array.isArray(result) ) {
-					return new IterExt(result);
-				}
-
-				return result;
 			});
 	}
 
@@ -304,13 +297,6 @@ function update_store(action_type, store, items) {
 				}
 			}
 			return action;
-		})
-		.then(result => {
-			if ( Array.isArray(result) ) {
-				return new IterExt(result);
-			}
-
-			return result;
 		});
 }
 
