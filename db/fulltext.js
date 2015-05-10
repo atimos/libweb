@@ -1,5 +1,7 @@
 'use strict';
 
+import IterExt from '../iterext/iterext';
+
 let Promise = require('../lib/bluebird/bluebird.js');
 let Lunr = require('../lib/lunr.js/lunr.js');
 
@@ -51,6 +53,8 @@ class Index {
 				items.forEach(item => {
 					this[_index].update(item);
 				});
+
+				items = new IterExt(items);
 			} else {
 				this[_index].update(items);
 			}
@@ -65,6 +69,8 @@ class Index {
 				items.forEach(item => {
 					this[_index].add(item);
 				});
+
+				items = new IterExt(items);
 			} else {
 				this[_index].add(items);
 			}
@@ -81,6 +87,8 @@ class Index {
 				id_list.forEach(item => {
 					this.index.remove({[ref]: id});
 				});
+
+				items = new IterExt(id_list);
 			} else {
 				this.index.remove({[ref]: id_list});
 			}
@@ -90,7 +98,7 @@ class Index {
 	}
 
 	search(query) {
-		return Promise.resolve(this[_index].search(query));
+		return Promise.resolve(new IterExt(this[_index].search(query)));
 	}
 
 	clear() {
