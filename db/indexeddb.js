@@ -1,5 +1,7 @@
 'use strict';
 
+import IterExt from '../iterext/iterext';
+
 let uuid = require('../lib/node-uuid/uuid.js', 'min'),
 	Promise = require('../lib/bluebird/bluebird.js');
 
@@ -117,15 +119,8 @@ class Store {
 		return new Index(this[_store].index(name));
 	}
 
-	get(key) {
-		return new Promise((resolve, reject) => {
-			add_transaction_handler(this[_store].transaction, reject);
-
-			this[_store].get(key)
-				.addEventListener('success', evt => {
-					resolve(evt.target.result);
-				});
-		});
+	get(keys) {
+		return get_from_store(this[_store], this[_store].transaction, 'get', keys);
 	}
 
 	range(...args) {
@@ -161,26 +156,12 @@ class Index {
 		this[_index] = index;
 	}
 
-	get(key) {
-		return new Promise((resolve, reject) => {
-			add_transaction_handler(this[_index].objectStore.transaction, reject);
-
-			this[_index].get(key)
-				.addEventListener('success', evt => {
-					resolve(evt.target.result);
-				});
-		});
+	get(keys) {
+		return get_from_store(this[_index], this[_index].objectStore.transaction, 'get', keys);
 	}
 
-	getKey(key) {
-		return new Promise((resolve, reject) => {
-			add_transaction_handler(this[_index].objectStore.transaction, reject);
-
-			this[_index].getKey(key)
-				.addEventListener('success', evt => {
-					resolve(evt.target.result);
-				});
-		});
+	getKey(keys) {
+		return get_from_store(this[_index], this[_index].objectStore.transaction, 'getKey', keys);
 	}
 
 	range(...args) {
@@ -336,6 +317,31 @@ function update_store(action, items, key = undefined) {
 	});
 }
 
+function get_from_store(store, transaction, action, keys) {
+	return new Promise((resolve, reject) => {
+		if ( Array.isArray(keys) ) {
+			let result = new Map();
+
+			add_transaction_handler(transaction, reject, resolve, result);
+
+		keys
+			.forEach((key, index) => {
+				store[action](keys)
+					.addEventListener('success', evt => {
+						result.set(index, evt.target.result);
+					});
+			});
+		} else {
+			add_transaction_handler(transaction, reject);
+
+			store[action](keys)
+				.addEventListener('success', evt => {
+					resolve(evt.target.result);
+				});
+		}
+	});
+}
+
 function add_transaction_handler(transaction, reject, resolve = null, result = null) {
 	transaction.addEventListener('error', evt => {
 		evt.preventDefault();
@@ -345,6 +351,10 @@ function add_transaction_handler(transaction, reject, resolve = null, result = n
 
 	if ( resolve !== null ) {
 		transaction.addEventListener('complete', () => {
+			if ( result !== null ) {
+				result = new IterExt(result);
+			}
+
 			resolve(result);
 		});
 	}
