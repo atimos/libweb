@@ -215,7 +215,7 @@ export default class IterExt {
 		return new IterExt(slice);
 	}
 
-	fold(result, fn) {
+	reduce(result, fn) {
 		for ( let entry of this ) {
 			if ( entry !== undefined ) {
 				result = fn(result, entry[1], entry[0]);
