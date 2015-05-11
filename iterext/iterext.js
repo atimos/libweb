@@ -257,6 +257,14 @@ export default class IterExt {
 		return map;
 	}
 
+	forEach(fn) {
+		for ( let entry of this ) {
+			if ( entry !== undefined ) {
+				fn(entry[1], entry[0]);
+			}
+		}
+	}
+
 	[Symbol.iterator]() {
 		return this;
 	}
