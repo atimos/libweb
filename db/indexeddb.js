@@ -326,9 +326,13 @@ function get_from_store(store, transaction, action, keys) {
 
 		keys
 			.forEach((key, index) => {
-				store[action](keys)
+				store[action](key)
 					.addEventListener('success', evt => {
-						result.set(index, evt.target.result);
+						if ( evt.target.result !== undefined ) {
+							result.set(index, evt.target.result);
+						} else {
+							result.set(index, null);
+						}
 					});
 			});
 		} else {
@@ -336,7 +340,11 @@ function get_from_store(store, transaction, action, keys) {
 
 			store[action](keys)
 				.addEventListener('success', evt => {
-					resolve(evt.target.result);
+					if ( evt.target.result !== undefined ) {
+						resolve(evt.target.result);
+					} else {
+						resolve(null);
+					}
 				});
 		}
 	});
