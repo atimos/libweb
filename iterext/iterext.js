@@ -169,11 +169,11 @@ export default class IterExt {
 	}
 
 	take(n = 1) {
-		let slice = [];
+		let map = new Map();
 
 		for ( let entry of this ) {
 			if ( entry !== undefined ) {
-				slice.push(entry[1]);
+				map.set(entry[0], entry[1]);
 
 				n -= 1;
 			}
@@ -184,11 +184,11 @@ export default class IterExt {
 
 		}
 
-		return new IterExt(slice);
+		return new IterExt(map);
 	}
 
 	take_while(fn) {
-		let slice = [];
+		let map = new Map();
 
 		for ( let entry of this ) {
 			if ( entry !== undefined ) {
@@ -196,23 +196,23 @@ export default class IterExt {
 					break;
 				}
 
-				slice.push(entry[1]);
+				map.set(entry[0], entry[1]);
 			}
 		}
 
-		return new IterExt(slice);
+		return new IterExt(map);
 	}
 
 	collect() {
-		let slice = [];
+		let map = new Map();
 
 		for ( let entry of this ) {
 			if ( entry !== undefined ) {
-				slice.push(entry[1]);
+				map.set(entry[0], entry[1]);
 			}
 		}
 
-		return new IterExt(slice);
+		return new IterExt(map);
 	}
 
 	reduce(fn, result) {
