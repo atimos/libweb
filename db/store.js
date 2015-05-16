@@ -22,15 +22,15 @@ export default function(db_name, index_store_name, version) {
 		db = indexeddb(db_name, version);
 
 	return {
-		index: function(name, cfg) {
+		index(name, cfg) {
 			index.set(name, cfg);
 			return this;
 		},
-		store: function(name, cfg) {
+		store(name, cfg) {
 			db.set(name, cfg);
 			return this;
 		},
-		then: function(resolve, reject) {
+		then(resolve, reject) {
 			return Promise.all([db, index])
 				.then(result => {
 					let [db, index] = result;
@@ -64,7 +64,7 @@ export default function(db_name, index_store_name, version) {
 					let [db, index] = result;
 
 					return {
-						get: function(store_list) {
+						get(store_list) {
 							if ( Array.isArray(store_list) ) {
 								let store_map = new Map();
 
@@ -215,7 +215,7 @@ class Store {
 
 				key_list.sort();
 
-				last_key = key_list[key_list.length -1];
+				last_key = key_list[key_list.length - 1];
 
 				return this[_db].get(this[_name])
 					.then(store => {
