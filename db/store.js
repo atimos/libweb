@@ -15,6 +15,8 @@ let _name = Symbol('name'),
 	_index_store_name = Symbol('idx_store_name'),
 	_index = Symbol('index');
 
+export const SCORE = Symbol('score');
+
 export default function(db_name, index_store_name, version) {
 	let index = fulltext(),
 		db = indexeddb(db_name, version);
@@ -274,9 +276,19 @@ class Store {
 				}
 			})
 			.then(result => {
+				result = result.toArray();
+
 				return this[_db].get(this[_name])
 					.then(store => {
-						return store.get(result.filter_map('ref').toArray());
+						return store.get(result.map(item => { return item.ref; }));
+					})
+					.then(items => {
+						let index = -1;
+						return items.map(item => {
+							index += 1;
+							item[SCORE] = result[index].score;
+							return item;
+						});
 					});
 			});
 	}
