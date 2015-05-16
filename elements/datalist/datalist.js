@@ -105,19 +105,20 @@ class LwDataList extends window.HTMLDataListElement {
 function keydown_event(evt) {
 	let key = evt.key, dl = this;
 
-	if ( key === 'ArrowLeft' || ( evt.keyCode === 9 && evt.shiftKey ) ) {
-		dl.previous();
-	} else if ( key === 'ArrowRight' || key === 'Tab' ) {
-		dl.next();
-	} else if ( key === 'ArrowUp' ) {
+	if ( evt.keyCode === 9 && evt.shiftKey ) {
 		dl.previous_group();
-	} else if ( key === 'ArrowDown' ) {
+	} else if ( key === 'Tab' ) {
 		dl.next_group();
+	} else if ( key === 'ArrowUp' ) {
+		dl.previous();
+	} else if ( key === 'ArrowDown' ) {
+		dl.next();
 	} else if ( key === 'Escape' ) {
 		clear(dl);
 	} else if ( key === 'Enter' && dl.value !== undefined ) {
-		dl.dispatchEvent(new CustomEvent('select', {detail: dl.value}));
+		let result = {detail: dl.value};
 		clear(dl);
+		dl.dispatchEvent(new CustomEvent('select', result));
 	}
 }
 
