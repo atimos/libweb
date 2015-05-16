@@ -15,7 +15,7 @@ export default function(name, version) {
 	let config_map = new Map();
 
 	return {
-		set: function(name, config) {
+		set(name, config) {
 			if ( config.key_gen === 'increment' ) {
 				config.autoIncrement = true;
 				delete config.key_gen;
@@ -48,7 +48,7 @@ export default function(name, version) {
 					for ( let entry of config_map.entries() ) {
 						let [name, config] = entry,
 							index = config.index || [],
-							store = null; 
+							store = null;
 
 						if ( evt.target.result.objectStoreNames.contains(name) ) {
 							evt.target.result.deleteObjectStore(name);
@@ -65,12 +65,12 @@ export default function(name, version) {
 
 				request.addEventListener('success', evt => {
 					resolve({
-						has: function(store_name) {
+						has(store_name) {
 							return (evt.target.objectStoreNames[store_name] !== undefined);
 						},
-						get: function(store_list, mode = 'readonly') {
+						get(store_list, mode = 'readonly') {
 							return new Promise(resolve => {
-								let transaction = evt.target.result.transaction(Array.isArray(store_list)?store_list:[store_list], mode);
+								let transaction = evt.target.result.transaction(Array.isArray(store_list) ? store_list : [store_list], mode);
 
 								if ( Array.isArray(store_list) ) {
 									let store_map = new Map();
@@ -86,7 +86,7 @@ export default function(name, version) {
 								}
 							});
 						},
-						delete_database: function() {
+						delete_database() {
 							return new Promise((resolve, reject) => {
 								var request = window.indexedDB.deleteDatabase(name);
 
@@ -324,17 +324,19 @@ function get_from_store(store, transaction, action, keys) {
 
 			add_transaction_handler(transaction, reject, resolve, result);
 
-		keys
-			.forEach((key, index) => {
-				store[action](key)
-					.addEventListener('success', evt => {
-						if ( evt.target.result !== undefined ) {
-							result.set(index, evt.target.result);
-						} else {
-							result.set(index, null);
-						}
-					});
-			});
+			keys
+				.forEach(key => {
+					if ( result.has(key) === false ) {
+						store[action](key)
+							.addEventListener('success', evt => {
+								if ( evt.target.result !== undefined ) {
+									result.set(key, evt.target.result);
+								} else {
+									result.set(key, null);
+								}
+							});
+					}
+				});
 		} else {
 			add_transaction_handler(transaction, reject);
 
