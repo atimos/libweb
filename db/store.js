@@ -15,8 +15,6 @@ let _name = Symbol('name'),
 	_index_store_name = Symbol('idx_store_name'),
 	_index = Symbol('index');
 
-export const SEARCH_SCORE = Symbol('search_score');
-
 export default function(db_name, index_store_name, version) {
 	let index = fulltext(),
 		db = indexeddb(db_name, version);
@@ -90,7 +88,7 @@ class Store {
 		this[_name] = name;
 		this[_db] = db;
 		this[_index_store_name] = index_store_name;
-		this[_index] = index.get(name) || null;
+		this[_index] = index;
 	}
 
 	get(...args) {
@@ -191,53 +189,94 @@ class Store {
 		return update_store('clear', this);
 	}
 
-	search(query) {
-		if ( this[_index] === null ) {
-			return Promise.reject(new Error('No index not found for: ' + this[_name]));
-		}
+	search(query, limit = 0, related = []) {
+		return Promise.resolve()
+			.then(() => {
+				let work_queue = [];
 
-		return this[_index].search(query)
+				related.unshift(this[_name]);
+
+				related.forEach(name => {
+					if ( this[_index].has(name) === false ) {
+						throw new Error('No index not found for: ' + name);
+					}
+					work_queue.push(this[_index].get(name).search(query));
+				});
+
+				return Promise.all(work_queue);
+			})
 			.then(result => {
-				let key_list = [],
-					last_key;
+				if ( result.length === 1 ) {
+					return result.shift();
+				} else {
+					let work_queue = [],
+						store_name = related.shift(),
+						result_map = result.shift().toMap('ref');
 
-				if ( result.length === 0 ) {
-					return new IterExt([]);
+					result.forEach((result, index) => {
+						let item_list = result.toArray(),
+							action = this[_db].get(related[index])
+								.then(store => {
+									return store.get(item_list.map(item => { return item.ref; }));
+								})
+								.then(result => {
+									let index = -1;
+									return result
+										.filter_map(item => {
+											index += 1;
+
+											if ( item[store_name] === undefined ) {
+												return false;
+											}
+
+											return {
+												ref: item[store_name],
+												score: item_list[index].score
+											};
+										});
+								});
+
+						work_queue.push(action);
+					});
+
+					return Promise.all(work_queue)
+						.then(result_list => {
+							result_list
+								.forEach(result => {
+									result
+										.forEach(value => {
+											if ( result_map.has(value.ref) ) {
+												let item = result.map.get(value.ref);
+												item.score += value.score;
+
+												result_map.set(value.ref, item);
+											} else {
+												result_map.set(value.ref, value);
+											}
+										});
+								});
+							return new IterExt(result_map);
+						});
 				}
+			})
+			.then(result => {
+				result = result.toArray();
 
-				result = result
-					.reduce((map, item) => {
-						map.set(item.ref, item.score);
-						key_list.push(item.ref);
+				result
+					.sort((a, b) => {
+						return b.score - a.score;
+					});
 
-						return map;
-					}, new Map());
-
-				key_list.sort();
-
-				last_key = key_list[key_list.length - 1];
-
+				if ( limit === 0 ) {
+					return new IterExt(result);
+				} else {
+					return new IterExt(result.slice(0, limit));
+				}
+			})
+			.then(result => {
 				return this[_db].get(this[_name])
 					.then(store => {
-						return store.range('bound', key_list.shift(), last_key)
-							.cursor(cursor => {
-								if ( cursor !== null ) {
-									let next_key = key_list.shift(),
-										score = result.get(cursor.primaryKey);
-
-									if ( score !== undefined ) {
-										cursor.value[SEARCH_SCORE] = score;
-										result.set(cursor.primaryKey, cursor.value);
-									}
-
-									if ( next_key !== undefined ) {
-										cursor.continue(next_key);
-									}
-								}
-							})
-							.then(() => {
-								return new IterExt(result);
-							});
+						return store.get(result.filter_map('ref').toArray());
 					});
 			});
 	}
