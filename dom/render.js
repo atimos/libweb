@@ -8,7 +8,7 @@ let events = Object.getOwnPropertyNames(document)
 	.filter((attribute, index, list) => {
 		return !attribute.indexOf('on') &&
 			( document[attribute] === null || typeof document[attribute] === 'function' ) &&
-			list.indexOf(attribute) == index;
+			list.indexOf(attribute) === index;
 	})
 	.map(item => {
 		return item.toLowerCase();
@@ -132,14 +132,14 @@ function set_attributes(node, data) {
 					.map(item => {
 						return item.trim();
 					}),
-				value = data[data_name||attr_name];
+				value = data[data_name || attr_name];
 
 			switch ( typeof value ) {
 				case 'undefined':
 					value = '';
 					break;
 				case 'boolean':
-					value = data_name||attr_name;
+					value = data_name || attr_name;
 					break;
 			}
 

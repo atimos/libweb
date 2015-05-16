@@ -24,7 +24,7 @@ class LwDataList extends window.HTMLDataListElement {
 							return {tpl: option.tpl, value: option, group: group.value, [_group_index]: group_index};
 						});
 				}
-				return {tpl: option.tpl, value: group, group: null, [_group_index]: group_index};
+				return {tpl: group.option.tpl, value: group, group: null, [_group_index]: group_index};
 			})
 			.reduce((options, option) => {
 				if ( Array.isArray(option) ) {
@@ -116,7 +116,7 @@ function keydown_event(evt) {
 	} else if ( key === 'Escape' ) {
 		clear(dl);
 	} else if ( key === 'Enter' && dl.value !== undefined ) {
-		dl.dispatchEvent(new CustomEvent('select', {detail:dl.value}));
+		dl.dispatchEvent(new CustomEvent('select', {detail: dl.value}));
 		clear(dl);
 	}
 }
@@ -145,7 +145,7 @@ function render(dl) {
 								let tpl = option.tpl;
 								delete option.tpl;
 
-								return {tpl: tpl, value: option};
+								return {tpl, value: option};
 							}
 
 							return {value: option};
