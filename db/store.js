@@ -299,9 +299,13 @@ function range_get_all(range) {
 
 function update_store(action_type, store, items) {
 	let db = store[_db],
-		index = store[_index],
+		index = null,
 		name = store[_name],
 		index_store_name = store[_index_store_name];
+
+	if ( store[_index].has(store[_name]) ) {
+		index = store[_index].get(store[_name]);
+	}
 
 	return db.get(name, 'readwrite')
 		.then(store => {
