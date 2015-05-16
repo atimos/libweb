@@ -246,7 +246,7 @@ class Store {
 									result
 										.forEach(value => {
 											if ( result_map.has(value.ref) ) {
-												let item = result.map.get(value.ref);
+												let item = result_map.get(value.ref);
 												item.score += value.score;
 
 												result_map.set(value.ref, item);
