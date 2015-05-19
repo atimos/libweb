@@ -15,20 +15,29 @@ let events = Object.getOwnPropertyNames(document)
 	});
 
 export default function(tpl, data) {
-	let node = tpl.content.cloneNode(true);
+	let node;
 
-	node_list_array(node.children)
-		.forEach(node => {
-			let name = node.dataset.tplRel;
+	if ( tpl.dataset.tplRel !== undefined ) {
+		node = document.createDocumentFragment();
+		node.appendChild(tpl.cloneNode(true));
 
-			if ( data.hasOwnProperty(name) ) {
-				if ( Array.isArray(data[name]) ) {
-					render_list(node, data[name]);
-				} else {
-					render_node(node, data[name]);
+		render_list(node.children[0], data[tpl.dataset.tplRel]);
+	} else {
+		node = tpl.content.cloneNode(true);
+
+		node_list_array(node.children)
+			.forEach(node => {
+				let name = node.dataset.tplRel;
+
+				if ( data.hasOwnProperty(name) ) {
+					if ( Array.isArray(data[name]) ) {
+						render_list(node, data[name]);
+					} else {
+						render_node(node, data[name]);
+					}
 				}
-			}
-		});
+			});
+	}
 
 	return node;
 }
