@@ -1,38 +1,18 @@
-<script defer="defer" src="./table.js"></script>
-
 <template>
-	<menu>
-		<input type="text" />
-	</menu>
-	<table>
-		<thead><tr></tr></thead>
-		<tbody></tbody>
-		<tfoot>
-			<tr></tr>
-			<tr></tr>
-			<tr></tr>
-		</tfoot>
-	</table>
-	<nav>
-	</nav>
+	<tr data-tpl-rel="row">
+		<template data-tpl-rel="col">
+			<th data-tpl-rel="select"><span data-tpl-val="name"></span></th>
+			<th data-tpl-rel="sort"><button data-tpl-attr="data-column:key, data-order:order" data-tpl-val="name"></button></span></th>
+			<th data-tpl-rel="nosort" data-tpl-attr="data-column:key"><span data-tpl-val="name"></span></th>
+		</template>
+	</tr>
 </template>
 
 <template>
-	<th data-id="" data-order=""><a href="#"></a></th>
+	<tr data-tpl-rel="row">
+		<td data-tpl-rel="select"></td>
+		<td data-tpl-rel="col"><span data-tpl-val="value"></span></td>
+	</tr>
 </template>
 
-<template>
-	<td></td>
-</template>
-
-<template>
-	<th></th>
-</template>
-
-<template>
-	<a href="#" data-action="first">First</a>
-	<a href="#" data-action="previous">Previous</a>
-	<span data-value="page"></span> / <span data-value="pages"></span> || <span data-value="rows"></span> / <span data-value="rows-total"></span>
-	<a href="#" data-action="next">Next</a>
-	<a href="#" data-action="last">End</a>
-</template>
+<script defer="defer" src="./table.js?s=es6"></script>

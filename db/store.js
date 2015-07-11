@@ -2,13 +2,13 @@
 
 import indexeddb from './indexeddb';
 import fulltext from './fulltext';
-import IterExt from '../iterext/iterext';
 
 let Promise = require('../lib/bluebird/bluebird.js');
+let Stream = require('../lib/streamjs/stream.js');
 
 let _name = Symbol('name'),
 	_db = Symbol('db'),
-	_queue = Symbol('queue'),
+	_pipeline = Symbol('queue'),
 	_store = Symbol('store'),
 	_index_name = Symbol('index_name'),
 	_dir = Symbol('direction'),
@@ -104,74 +104,17 @@ class Store {
 		return new Iterator(this[_db].get(this[_name]), direction);
 	}
 
-	range(...range_args) {
-		return {
-			cursor: (...args) => {
-				return this[_db].get(this[_name])
-					.then(store => {
-						return store.range(...range_args).cursor(...args);
-					});
-			},
-			count: () => {
-				return this[_db].get(this[_name])
-					.then(store => {
-						return store.range(...range_args).count();
-					});
-			},
-			then: (resolve, reject) => {
-				return this[_db].get(this[_name])
-					.then(store => {
-						return range_get_all(store.range(...range_args));
-					}).then(resolve, reject);
-			}
-		};
-	}
-
-	index(...args_index) {
+	index(index_name) {
 		return {
 			get: (...args) => {
 				return this[_db].get(this[_name])
 					.then(store => {
-						return store.index(...args_index).get(...args);
-					});
-			},
-			getKey: (...args) => {
-				return this[_db].get(this[_name])
-					.then(store => {
-						return store.index(...args_index).getKey(...args);
+						return store.index(index_name).get(...args);
 					});
 			},
 			iter: (direction = 'next') => {
-				return new Iterator(this[_db].get(this[_name]), direction, ...args_index);
+				return new Iterator(this[_db].get(this[_name]), direction, index_name);
 			},
-			range: (...range_args) => {
-				return {
-					keyCursor: (...args) => {
-						return this[_db].get(this[_name])
-							.then(store => {
-								return store.index(...args_index).range(...range_args).keyCursor(...args);
-							});
-					},
-					cursor: (...args) => {
-						return this[_db].get(this[_name])
-							.then(store => {
-								return store.index(...args_index).range(...range_args).cursor(...args);
-							});
-					},
-					count: () => {
-						return this[_db].get(this[_name])
-							.then(store => {
-								return store.index(...args_index).range(...range_args).count();
-							});
-					},
-					then: (resolve, reject) => {
-						return this[_db].get(this[_name])
-							.then(store => {
-								return range_get_all(store.index(...args_index).range(...range_args));
-							});
-					}
-				};
-			}
 		};
 	}
 
@@ -356,64 +299,48 @@ function update_store(action_type, store, items) {
 }
 
 class Iterator {
-	constructor(store, direction, index_name) {
+	constructor(store, direction) {
 		this[_store] = store;
-		this[_index_name] = index_name;
 		this[_dir] = direction;
-		this[_queue] = [];
+		this[_pipeline] = [];
 	}
 
 	then(resolve, reject) {
-		return this[_store]
+		return this.get_store()
 			.then(store => {
 				let result = new Map();
-
-				if ( this[_index_name] !== undefined ) {
-					store = store.index(this[_index_name]);
-				}
 
 				return store.range()
 					.cursor(cursor => {
 						if ( cursor ) {
-							let entry = {key: cursor.primaryKey, value: cursor.value, done: false};
+							let entry = {key: cursor.primaryKey, value: cursor.value};
 
-							for ( let action of this[_queue] ) {
+							for ( let action of this[_pipeline] ) {
 								entry = action(entry);
 							}
 
-							if ( entry !== undefined && entry.done === false ) {
+							if ( entry !== null ) {
 								result.set(entry.key, entry.value);
 							}
 
-							if ( entry === undefined || entry.done === false ) {
-								cursor.continue();
-							}
+							cursor.continue();
 						}
 					}, this[_dir])
 					.then(() => {
-						return new IterExt(result);
+						return result;
 					});
 			}).then(resolve, reject);
 	}
 
-	map(fn) {
-		this[_queue]
-			.push(entry => {
-				if ( entry !== undefined ) {
-					entry.value = fn(entry.value, entry.key);
-				}
-
-				return entry;
-			});
-
-		return this;
+	get_store() {
+		return this[_store];
 	}
 
 	filter(fn) {
-		this[_queue]
+		this[_pipeline]
 			.push(entry => {
-				if ( entry !== undefined && fn(entry.value, entry.key) !== true ) {
-					entry = undefined;
+				if ( entry !== null && fn(entry.value, entry.key) !== true ) {
+					entry = null;
 				}
 
 				return entry;
@@ -422,89 +349,32 @@ class Iterator {
 		return this;
 	}
 
-	filter_map(fn) {
-		if ( Object.prototype.toString.call(fn) === '[object Function]' ) {
-			this[_queue].push(entry => {
-				if ( entry !== undefined ) {
+	map(fn) {
+		this[_pipeline]
+			.push(entry => {
+				if ( entry !== null ) {
 					entry.value = fn(entry.value, entry.key);
-
-					if ( entry.value === null ) {
-						entry = undefined;
-					}
-				}
-
-				return entry;
-			});
-		} else {
-			this[_queue].push(entry => {
-				if ( entry !== undefined ) {
-					if ( Object.prototype.toString.call(entry.value) === '[object Map]' ) {
-						if ( entry.value.has(fn) ) {
-							entry.value = entry.value.get(fn);
-						} else {
-							entry = undefined;
-						}
-					} else {
-						if ( entry.value.hasOwnProperty(fn) ) {
-							entry.value = entry.value[fn];
-						} else {
-							entry = undefined;
-						}
-					}
-				}
-
-				return entry;
-			});
-		}
-
-		return this;
-	}
-
-	skip(n = 1) {
-		this.filter(() => {
-			if ( n > 0 ) {
-				n -= 1;
-				return false;
-			} else {
-				return true;
-			}
-		});
-
-		return this;
-	}
-
-	skip_while(fn) {
-		this.filter((item, index) => {
-			return !fn(item, index);
-		});
-
-		return this;
-	}
-
-	take(n) {
-		this.take_while(() => {
-			if ( n === 0 ) {
-				return false;
-			}
-
-			n -= 1;
-
-			return true;
-		});
-
-		return this;
-	}
-
-	take_while(fn) {
-		this[_queue]
-			.push(entry => {
-				if ( entry !== undefined && fn(entry.value, entry.key) !== true ) {
-					entry.done = true;
 				}
 
 				return entry;
 			});
 
 		return this;
+	}
+}
+
+class IndexIterator extends Iterator {
+	constructor(store, index_name, direction) {
+		this[_store] = store;
+		this[_dir] = direction;
+		this[_index_name] = index_name;
+		this[_pipeline] = [];
+	}
+
+	get_store() {
+		return this[_store]
+			.then(store => {
+				return store.index(this[_index_name]);
+			});
 	}
 }

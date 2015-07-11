@@ -59,10 +59,16 @@ function render_node(node, data) {
 
 			Object.keys(data.children)
 				.forEach(name => {
-					if ( Array.isArray(data.children[name]) ) {
-						render_list(node.querySelector(':scope > [data-tpl-rel="' + name + '"]'), data.children[name]);
+					let node_list = render_list(node.querySelector(':scope > [data-tpl-rel="' + name + '"]'));
+
+					if ( node_list === undefined ) {
+						set_value(node, data.value);
 					} else {
-						render_node(node.querySelector(':scope > [data-tpl-rel="' + name + '"]'), data.children[name]);
+						if ( Array.isArray(data.children[name]) ) {
+							render_list(node_list, data.children[name]);
+						} else {
+							render_node(node_list, data.children[name]);
+						}
 					}
 				});
 		}
@@ -129,9 +135,10 @@ function set_attributes_all(node, attr) {
 		set_attributes(node, attr);
 	}
 
-	Array.prototype.forEach.call(node.querySelectorAll('[data-tpl-attr]'), node => {
-		set_attributes(node, attr);
-	});
+	node_list_array(node.querySelectorAll('[data-tpl-attr]'))
+		.forEach(node => {
+			set_attributes(node, attr);
+		});
 }
 
 function set_attributes(node, data) {
@@ -168,22 +175,18 @@ function set_attributes(node, data) {
 }
 
 function set_value(node, value) {
-	if ( node.dataset.tplVal !== undefined ) {
-		set_attributes(node, value);
-		delete node.dataset.tplVal;
-	}
+	node_list_array(node.querySelectorAll('[data-tpl-val]'))
+		.forEach(node => {
+			node.dataset.tplVal.split('|')
+				.some(content => {
+					content = content.trim();
 
-	Array.prototype.forEach.call(node.querySelectorAll('[data-tpl-val]'), node => {
-		node.dataset.tplVal.split('|')
-			.some(content => {
-				content = content.trim();
+					if ( value[content] !== undefined ) {
+						node.textContent = value[content];
+						return true;
+					}
+				});
 
-				if ( value[content] !== undefined ) {
-					node.textContent = value[content];
-					return true;
-				}
-			});
-
-		delete node.dataset.tplVal;
-	});
+			delete node.dataset.tplVal;
+		});
 }

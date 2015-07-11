@@ -4,43 +4,15 @@ import {selector as clear_selector} from '../../dom/clear';
 import {selector as collection_selector} from '../../dom/collection';
 import render_tpl from '../../dom/render';
 
-let _items = Symbol('options'),
-	_groups = Symbol('groups'),
-	_pos = Symbol('position'),
-	_group_index = Symbol('group_index'),
+let _options = Symbol('options'),
+	_items = Symbol('items'),
 	self_document = window.document.currentScript.ownerDocument;
 
 class LwDataList extends window.HTMLDataListElement {
-	set options(groups) {
+	set options(items) {
 		clear(this);
 
-		this[_groups] = groups;
-
-		this[_items] = this[_groups]
-			.map((group, group_index) => {
-				if ( Array.isArray(group.options) ) {
-					return group.options
-						.map(option => {
-							return {tpl: option.tpl, value: option, group: group.value, [_group_index]: group_index};
-						});
-				}
-				return {tpl: group.option.tpl, value: group, group: null, [_group_index]: group_index};
-			})
-			.reduce((options, option) => {
-				if ( Array.isArray(option) ) {
-					option.forEach(option => {
-						options.push(option);
-					});
-				} else {
-					options.push(option);
-				}
-
-				return options;
-			}, [])
-			.filter(item => {
-				return item !== undefined;
-			});
-
+		this[_items] = items;
 		render(this);
 	}
 
@@ -49,11 +21,46 @@ class LwDataList extends window.HTMLDataListElement {
 	}
 
 	get value() {
-		return this[_items][this[_pos]];
+		let value;
+
+		this[_options]
+			.some((item, index) => {
+				if ( item.classList.contains('selected') ) {
+					value = item.getAttribute('value');
+
+					if ( value === null ) {
+						value = this[_items][index];
+					}
+
+					return true;
+				}
+			});
+
+		return value;
 	}
 
 	get length() {
-		return this[_items].length;
+		return this[_options].length;
+	}
+
+	clear() {
+		clear(this);
+	}
+
+	next() {
+		select_option(this, 1);
+	}
+
+	previous() {
+		select_option(this, -1);
+	}
+
+	next_group() {
+		select_option(this, 1, true);
+	}
+
+	previous_group() {
+		select_option(this, -1, true);
 	}
 
 	createdCallback() {
@@ -63,42 +70,6 @@ class LwDataList extends window.HTMLDataListElement {
 
 	attachedCallback() {
 		render(this);
-	}
-
-	clear() {
-		clear(this);
-	}
-
-	next() {
-		if ( this[_pos] < this[_items].length - 1 ) {
-			this[_pos] += 1;
-			select_option(this);
-		}
-	}
-
-	previous() {
-		if ( this[_pos] > 0 ) {
-			this[_pos] -= 1;
-			select_option(this);
-		}
-	}
-
-	next_group() {
-		let pos = next_group(this, 1);
-
-		if ( pos < this[_items].length ) {
-			this[_pos] = pos;
-			select_option(this);
-		}
-	}
-
-	previous_group() {
-		let pos = next_group(this, -1);
-
-		if ( pos >= 0 ) {
-			this[_pos] = pos;
-			select_option(this);
-		}
 	}
 }
 
@@ -116,7 +87,7 @@ function keydown_event(evt) {
 	} else if ( key === 'Escape' ) {
 		clear(dl);
 	} else if ( key === 'Enter' && dl.value !== undefined ) {
-		let result = {detail: dl.value};
+		let result = {detail: {value: dl.value}};
 		clear(dl);
 		dl.dispatchEvent(new CustomEvent('select', result));
 	}
@@ -136,76 +107,105 @@ function render(dl) {
 	}
 
 	fragment = render_tpl(tpl, {
-		group: dl[_groups]
-			.map(group => {
-				return {
-					value: group.value,
-					children: {option: group.options
-						.map(option => {
-							if ( option.tpl !== undefined ) {
-								let tpl = option.tpl;
-								delete option.tpl;
+		type: dl[_items]
+			.map(option => {
+				let value = option.value,
+					data = {tpl: option.tpl, value, children: {}};
 
-								return {tpl, value: option};
-							}
-
-							return {value: option};
-						})
+				for ( let name in value ) {
+					if ( Array.isArray(option.value[name]) ) {
+						data.children[name] = value[name]
+							.map(item => {
+								return {value: item};
+							});
 					}
-				};
+				}
+
+				return data;
 			})
 	});
 
 	clear_selector(':scope > *:not(template)', dl);
 
 	dl.appendChild(fragment);
+
+	dl[_options] = collection_selector(':scope option', dl);
 }
 
-function select_option(dl) {
-	collection_selector(':scope option', dl)
-		.forEach((node, index) => {
-			if ( index === dl[_pos] ) {
-				node.classList.add('selected');
-			} else {
+function select_option(dl, rel_index, group = false) {
+	let found_selected = false;
+
+	if ( dl.length === 0 ) {
+		return;
+	}
+
+	dl[_options]
+		.some((node, index, list) => {
+			if ( node.classList.contains('selected') ) {
+				let next_index = index + rel_index, next_node;
+
+				found_selected = true;
+
+				if ( next_index === list.length ) {
+					next_node = list[0];
+				} else if ( next_index === -1 ) {
+					next_node = list[list.length - 1];
+
+					if ( group === true && next_node.parentNode.nodeName === 'OPTGROUP' ) {
+						next_node = next_node.parentNode.firstElementChild;
+					}
+				} else {
+					next_node = list[next_index];
+
+					if ( group === true && node.parentNode.nodeName === 'OPTGROUP' ) {
+						if ( rel_index === 1 ) {
+							if ( node.parentNode.nextElementSibling ) {
+								next_node = node.parentNode.nextElementSibling;
+							} else {
+								next_node = list[list.length - 1];
+							}
+						} else {
+							if ( node.parentNode.previousElementSibling ) {
+								next_node = node.parentNode.previousElementSibling;
+							} else {
+								next_node = list[0];
+							}
+						}
+
+						if ( next_node.nodeName === 'OPTGROUP' ) {
+							next_node = next_node.firstElementChild;
+						}
+					}
+				}
+
 				node.classList.remove('selected');
+				next_node.classList.add('selected');
+
+				return true;
 			}
 		});
+
+	if ( found_selected === false ) {
+		let next_node;
+
+		if ( rel_index === 1 ) {
+			next_node = dl[_options][0];
+		} else {
+			next_node = dl[_options][dl[_options].length - 1];
+
+			if ( group === true && next_node.parentNode.nodeName === 'OPTGROUP' ) {
+				next_node = next_node.parentNode.firstElementChild;
+			}
+		}
+
+		next_node.classList.add('selected');
+	}
 }
 
 function clear(dl) {
-	dl[_pos] = -1;
+	dl[_options] = [];
 	dl[_items] = [];
-	dl[_groups] = [];
 	render(dl);
-}
-
-function next_group(dl, direction) {
-	let pos = 0, group_index;
-
-	if ( dl.value === undefined ) {
-		return 0;
-	}
-
-	group_index = dl.value[_group_index] + direction;
-
-	if ( group_index < 0 ) {
-		return 0;
-	}
-
-	dl[_groups]
-		.some((group, index) => {
-			if ( index === group_index ) {
-				return true;
-			}
-
-			if ( Array.isArray(group.options) ) {
-				pos += group.options.length;
-			} else {
-				pos += 1;
-			}
-		});
-
-	return pos;
 }
 
 window.document.registerElement('lw-datalist', {prototype: LwDataList.prototype});
