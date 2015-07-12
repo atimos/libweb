@@ -1,7 +1,5 @@
 'use strict';
 
-import IterExt from '../iterext/iterext';
-
 let uuid = require('../lib/node-uuid/uuid.js', 'min'),
 	Promise = require('../lib/bluebird/bluebird.js'),
 	Stream = require('../lib/streamjs/stream.js');

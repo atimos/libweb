@@ -1,7 +1,5 @@
 'use strict';
 
-import IterExt from '../iterext/iterext';
-
 let Promise = require('../lib/bluebird/bluebird.js'),
 	Lunr = require('../lib/lunr.js/lunr.js'),
 	Stream = require('../lib/streamjs/stream.js');
