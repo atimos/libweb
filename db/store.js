@@ -3,8 +3,8 @@
 import indexeddb from './indexeddb';
 import fulltext from './fulltext';
 
-let Promise = require('../lib/bluebird/bluebird.js');
-let Stream = require('../lib/streamjs/stream.js');
+let Promise = require('../lib/bluebird/bluebird.js'),
+	Stream = require('../lib/streamjs/stream.js');
 
 let _name = Symbol('name'),
 	_db = Symbol('db'),
@@ -12,22 +12,25 @@ let _name = Symbol('name'),
 	_store = Symbol('store'),
 	_index_name = Symbol('index_name'),
 	_dir = Symbol('direction'),
-	_index_store_name = Symbol('idx_store_name'),
 	_index = Symbol('index');
 
 export const SCORE = Symbol('score');
 
-export default function(db_name, index_store_name, version) {
+export default function(db_name, version, index_store_name = null) {
 	let index = fulltext(),
 		db = indexeddb(db_name, version);
 
 	return {
-		index(name, cfg) {
-			index.set(name, cfg);
-			return this;
-		},
-		store(name, cfg) {
+		set(name, cfg) {
 			db.set(name, cfg);
+
+			if ( Array.isArray(cfg.fulltext) && cfg.key !== undefined ) {
+				index.set(name, {
+					ref: cfg.key,
+					fields: cfg.fulltext
+				});
+			}
+
 			return this;
 		},
 		then(resolve, reject) {
@@ -35,50 +38,50 @@ export default function(db_name, index_store_name, version) {
 				.then(result => {
 					let [db, index] = result;
 
-					if ( !index_store_name ) {
-						return result;
+					if ( index_store_name !== null ) {
+						return db.load([index_store_name])
+							.then(store => {
+								let work_queue = [];
+
+								store = store.get(index_store_name);
+
+								for ( let [name, index] of index.entries() ) {
+									work_queue.push(store.get([name])
+										.then(index_data => {
+											index_data.getFirst().ifPresent(item => {
+												return index.raw_set_data(index_data);
+											});
+										}));
+								}
+
+								return Promise.all(work_queue);
+							})
+							.then(() => {
+								return result;
+							});
 					}
 
-					return db.get(index_store_name)
-						.then(store => {
-							let work_queue = [];
-
-							for ( let entry of index.entries() ) {
-								let [name, index] = entry;
-
-								work_queue.push(store.get(name)
-									.then(index_data => {
-										if ( index_data ) {
-											return index.raw_set_data(index_data);
-										}
-									}));
-							}
-
-							return Promise.all(work_queue);
-						})
-						.then(() => {
-							return result;
-						});
+					return result;
 				})
 				.then(result => {
 					let [db, index] = result;
 
 					return {
 						get(store_list) {
-							if ( Array.isArray(store_list) ) {
-								let store_map = new Map();
+							let store_map = new Map();
 
-								store_list.forEach(store_name => {
-									store_map.set(store_name, new Store(db, index, store_name, index_store_name));
-								});
-
-								return store_map;
-							} else {
-								return new Store(db, index, store_list, index_store_name);
+							if ( !Array.isArray(store_list) ) {
+								store_list = [store_list];
 							}
+
+							store_list.forEach(store_name => {
+								store_map.set(store_name, new Store(store_name, db, index, index_store_name));
+							});
+
+							return store_map;
 						},
-						raw_index: index,
-						raw_db: db
+						index: index,
+						db: db
 					};
 				}).then(resolve, reject);
 		}
@@ -86,220 +89,163 @@ export default function(db_name, index_store_name, version) {
 }
 
 class Store {
-	constructor(db, index, name, index_store_name) {
+	constructor(name, db, index, index_name) {
 		this[_name] = name;
 		this[_db] = db;
-		this[_index_store_name] = index_store_name;
+		this[_index_name] = index_name;
 		this[_index] = index;
 	}
 
-	get(...args) {
-		return this[_db].get(this[_name])
+	get(item) {
+		return this[_db].load([this[_name]])
 			.then(store => {
-				return store.get(...args);
+				return store.get(this[_name]).get([item])
+					.then(result => {
+						result.getFirst().orElse(null);
+					});
 			});
 	}
 
 	iter(direction = 'next') {
-		return new Iterator(this[_db].get(this[_name]), direction);
+		return new Iterator(direction, this);
 	}
 
 	index(index_name) {
 		return {
-			get: (...args) => {
-				return this[_db].get(this[_name])
+			get: (item) => {
+				return this[_db].load([this[_name]])
 					.then(store => {
-						return store.index(index_name).get(...args);
+						return store.get(this[_name]).index(index_name).get([item]);
+							.then(result => {
+								result.getFirst().orElse(null);
+							});
 					});
 			},
 			iter: (direction = 'next') => {
-				return new Iterator(this[_db].get(this[_name]), direction, index_name);
+				return new IndexIterator(direction, this, index_name);
 			},
 		};
 	}
 
 	put(items) {
-		return update_store('put', this, items);
+		return update_store('put', items, this);
 	}
 
 	add(items) {
-		return update_store('add', this, items);
+		return update_store('add', items, this);
 	}
 
 	delete(id_list) {
-		return update_store('add', this, id_list);
+		return update_store('add', id_list, this);
 	}
 
 	clear() {
-		return update_store('clear', this);
-	}
+		let store_list = [this[_name]];
 
-	search(query, limit = 0, related = []) {
-		return Promise.resolve()
-			.then(() => {
-				let work_queue = [];
+		if ( this[_index_name] ) {
+			store_list.push(this[_index_name]);
+		}
 
-				related.unshift(this[_name]);
+		return this[_db].load(store_list)
+			.then(store_list => {
+				let work_queue = [store_list.get(this[_name]).clear()];
 
-				related.forEach(name => {
-					if ( this[_index].has(name) === false ) {
-						throw new Error('No index not found for: ' + name);
-					}
-					work_queue.push(this[_index].get(name).search(query));
-				});
+				if ( this[_index_name] ) {
+					work_queue.push(store_list.get(this[_index_name]).delete(this[_name]));
+				}
+
+				if ( this[_index].has(name) === true ) {
+					work_queue.push(this[_index].get(name).clear());
+				}
 
 				return Promise.all(work_queue);
 			})
-			.then(result => {
-				if ( result.length === 1 ) {
-					return result.shift();
-				} else {
-					let work_queue = [],
-						store_name = related.shift(),
-						result_map = result.shift().toMap('ref');
-
-					result.forEach((result, index) => {
-						let item_list = result.toArray(),
-							action = this[_db].get(related[index])
-								.then(store => {
-									return store.get(item_list.map(item => { return item.ref; }));
-								})
-								.then(result => {
-									let index = -1;
-									return result
-										.filter_map(item => {
-											index += 1;
-
-											if ( item[store_name] === undefined ) {
-												return false;
-											}
-
-											return {
-												ref: item[store_name],
-												score: item_list[index].score
-											};
-										});
-								});
-
-						work_queue.push(action);
-					});
-
-					return Promise.all(work_queue)
-						.then(result_list => {
-							result_list
-								.forEach(result => {
-									result
-										.forEach(value => {
-											if ( result_map.has(value.ref) ) {
-												let item = result_map.get(value.ref);
-												item.score += value.score;
-
-												result_map.set(value.ref, item);
-											} else {
-												result_map.set(value.ref, value);
-											}
-										});
-								});
-							return new IterExt(result_map);
-						});
-				}
-			})
-			.then(result => {
-				result = result.toArray();
-
-				result
-					.sort((a, b) => {
-						return b.score - a.score;
-					});
-
-				if ( limit === 0 ) {
-					return new IterExt(result);
-				} else {
-					return new IterExt(result.slice(0, limit));
-				}
-			})
-			.then(result => {
-				result = result.toArray();
-
-				return this[_db].get(this[_name])
-					.then(store => {
-						return store.get(result.map(item => { return item.ref; }));
-					})
-					.then(items => {
-						let index = -1;
-						return items.map(item => {
-							index += 1;
-							item[SCORE] = result[index].score;
-							return item;
-						});
-					});
+			.then(() => {
+				return;
 			});
+
 	}
-}
 
-function range_get_all(range) {
-	let result = new Map();
+	search(query, limit = 0) {
+		let store_name = this[_name];
 
-	return range
-		.cursor(cursor => {
-			if ( cursor !== null ) {
-				result.set(cursor.primaryKey, cursor.value);
-				cursor.continue();
+		return new Promise((resolve, reject) => {
+			if ( this[_index].has(store_name) === false ) {
+				reject(new Error('No fulltext search index not found for: ' + store_name));
+			} else {
+				resolve(this[_index].get(store_name).search(query));
 			}
 		})
-		.then(() => {
-			return new IterExt(result);
-		});
+			.then(search_result => {
+				if ( limit > 0 ) {
+					return search_result.limit(limit);
+				} else {
+					return search_result;
+				}
+			});
+			.then(search_result => {
+				let result_map = new Map();
+
+				return this[_db].load([store_name])
+					.then(store => {
+						store = store.get(store_name);
+						let work_queue = [];
+
+						for ( let item of search_result ) {
+							result_map.set(item.ref, null);
+
+							work_queue.push(store.get([item.ref])
+								.then(store_item => {
+									store_item.findFirst().ifPresent(item => {
+										store_item[SCORE] = item.score;
+										result_map.set(item.ref, store_item);
+									});
+								}));
+						}
+
+						return Promise.all(work_queue)
+							.then(() => {
+								return Stream(result_map);
+							});
+					});
+			});
 }
 
-function update_store(action_type, store, items) {
-	let db = store[_db],
-		index = null,
-		name = store[_name],
-		index_store_name = store[_index_store_name];
+function update_store(action_type, items, store) {
+	let store_list = [store[_name]];
 
-	if ( store[_index].has(store[_name]) ) {
-		index = store[_index].get(store[_name]);
+	if ( !Array.isArray(items) ) {
+		items = [items];
 	}
 
-	return db.get(name, 'readwrite')
-		.then(store => {
-			let action = store[action_type](items);
+	if ( this[_index_name] ) {
+		store_list.push(this[_index_name]);
+	}
 
-			if ( index !== null ) {
-				action = action.then(index[action_type](items));
+	return db.load(store_list, 'readwrite')
+		.then(store_list => {
+			let work_queue = [store[action_type](items)];
 
-				if ( index_store_name ) {
-					action = action.then(() => {
-						if ( action_type === 'clear' ) {
+			if ( store[_index].has(store[_name]) ) {
+				let index = store[_index].get(store[_name]);
+				work_queue.push(index[action_type](items)
+					.then(() => {
+						if ( store[_index_name] ) {
 							return index.raw_get_data()
-								.then(data => {
-									return db.get(index_store_name, 'readwrite').delete(data.name);
-								})
-								.then(result => {
-									return index.clear()
-										.then(() => {
-											return result;
-										});
-								});
-						} else {
-							return index.raw_get_data()
-								.then(data => {
-									return db.get(index_store_name, 'readwrite')
-										.then(store => {
-											return store.put(data);
-										});
-								});
+								.then(store_list.get(store[_index_name]).put);
 						}
-					});
-				}
+					}));
 			}
-			return action;
+
+			return Promise.all(work_queue);
+		})
+		.then(() => {
+			return;
 		});
 }
 
 class Iterator {
-	constructor(store, direction) {
+	constructor(direction, store) {
 		this[_store] = store;
 		this[_dir] = direction;
 		this[_pipeline] = [];
@@ -316,34 +262,37 @@ class Iterator {
 							let entry = {key: cursor.primaryKey, value: cursor.value};
 
 							for ( let action of this[_pipeline] ) {
+								if ( entry === null ) {
+									break;
+								}
+
 								entry = action(entry);
 							}
 
 							if ( entry !== null ) {
-								result.set(entry.key, entry.value);
+								result.set(entry.primaryKey, entry.value);
 							}
 
 							cursor.continue();
 						}
 					}, this[_dir])
 					.then(() => {
-						return result;
+						return Stream(result);
 					});
 			}).then(resolve, reject);
 	}
 
 	get_store() {
-		return this[_store];
+		return this[_store][_db].load([this[_store][_name]])
+			.then(store => {
+				return store.get(this[_store][_name]);
+			});
 	}
 
 	filter(fn) {
 		this[_pipeline]
 			.push(entry => {
-				if ( entry !== null && fn(entry.value, entry.key) !== true ) {
-					entry = null;
-				}
-
-				return entry;
+				return (fn(entry.value, entry.key) === true ? entry : null);
 			});
 
 		return this;
@@ -352,9 +301,7 @@ class Iterator {
 	map(fn) {
 		this[_pipeline]
 			.push(entry => {
-				if ( entry !== null ) {
-					entry.value = fn(entry.value, entry.key);
-				}
+				entry.value = fn(entry.value, entry.key);
 
 				return entry;
 			});
@@ -364,17 +311,17 @@ class Iterator {
 }
 
 class IndexIterator extends Iterator {
-	constructor(store, index_name, direction) {
+	constructor(direction, store, index_name) {
 		this[_store] = store;
 		this[_dir] = direction;
-		this[_index_name] = index_name;
 		this[_pipeline] = [];
+		this[_index_name] = index_name;
 	}
 
 	get_store() {
-		return this[_store]
+		return this[_store][_db].load([this[_store][_name]])
 			.then(store => {
-				return store.index(this[_index_name]);
+				return store.get(this[_store][_name]).index(this[_index_name]);
 			});
 	}
 }

@@ -2,35 +2,25 @@
 
 import IterExt from '../iterext/iterext';
 
-let Promise = require('../lib/bluebird/bluebird.js');
-let Lunr = require('../lib/lunr.js/lunr.js');
+let Promise = require('../lib/bluebird/bluebird.js'),
+	Lunr = require('../lib/lunr.js/lunr.js'),
+	Stream = require('../lib/streamjs/stream.js');
 
 let _cfg = Symbol('cfg'),
-	_name = Symbol('name'),
 	_index = Symbol('index');
 
 export default function() {
-	let index_map = new Map(), data_map = new Map();
+	let index_map = new Map();
 
 	return {
-		set: function(name, cfg, data = []) {
-			data_map.set(name, data);
+		set: function(name, cfg) {
 			index_map.set(name, cfg);
 			return this;
 		},
 		then: (resolve, reject) => {
 			return new Promise(resolve => {
-				for ( let entry of index_map.entries() ) {
-					let [name, cfg] = entry;
-					let index = new Index(name, cfg);
-
-					data_map
-						.get(name)
-						.forEach(item => {
-							index.put(item);
-						});
-
-					index_map.set(name, index);
+				for ( let [name, cfg] of index_map.entries() ) {
+					index_map.set(name, new Index(cfg));
 				}
 
 				resolve(index_map);
@@ -40,75 +30,38 @@ export default function() {
 }
 
 class Index {
-	constructor(name, cfg) {
-		this[_name] = name;
+	constructor(cfg) {
 		this[_index] = null;
 		this[_cfg] = cfg;
 		this.clear();
 	}
 
 	put(items) {
-		return new Promise(resolve => {
-			if ( Array.isArray(items) ) {
-				items.forEach(item => {
-					this[_index].update(item);
-				});
-
-				items = new IterExt(items);
-			} else {
-				this[_index].update(items);
-			}
-
-			resolve(items);
-		});
+		return update_index('update', items, this[_index]);
 	}
 
 	add(items) {
-		return new Promise(resolve => {
-			if ( Array.isArray(items) ) {
-				items.forEach(item => {
-					this[_index].add(item);
-				});
-
-				items = new IterExt(items);
-			} else {
-				this[_index].add(items);
-			}
-
-			resolve(items);
-		});
+		return update_index('add', items, this[_index]);
 	}
 
 	delete(id_list) {
-		return new Promise(resolve => {
 			let ref = this[_cfg].ref;
 
-			if ( Array.isArray(id_list) ) {
-				id_list.forEach(item => {
-					this.index.remove({[ref]: id});
-				});
-
-				items = new IterExt(id_list);
-			} else {
-				this.index.remove({[ref]: id_list});
-			}
-
-			resolve(id_list);
-		});
+			return update_index('remove', id_list.map(id => {
+				return {[ref]: id};
+			}), this[_index]);
 	}
 
 	search(query) {
-		return Promise.resolve(new IterExt(this[_index].search(query)));
+		return Promise.resolve(Stream(this[_index].search(query)));
 	}
 
 	clear() {
 		return new Promise(resolve => {
-			let cfg = this[_cfg];
-
 			this[_index] = Lunr(function() {
-				this.ref(cfg.ref);
+				this.ref(this[_cfg].ref);
 
-				cfg.fields
+				this[_cfg].fields
 					.map(field => {
 						this.field(field.name, {boost: field.boost||0});
 					});
@@ -121,15 +74,33 @@ class Index {
 	raw_set_data(data) {
 		return new Promise(resolve => {
 			this[_index] = Lunr.Index.load(data);
-			resolve(this[_index]);
+			resolve();
 		});
 	}
 
 	raw_get_data() {
 		return new Promise(resolve => {
-			let data = JSON.parse(JSON.stringify(this[_index]));
-			data.name = this[_name];
-			resolve(data);
+			resolve(JSON.parse(JSON.stringify(this[_index])));
 		});
 	}
+}
+
+function update_index(action, data, index) {
+		return new Promise((resolve, reject) => {
+			let failed = [];
+
+			data.forEach(item => {
+				try {
+					index[action](item);
+				} catch (err) {
+					failed.push({data: item, error: err});
+				}
+			});
+
+			if ( failed.length > 0 ) {
+				reject(failed);
+			} else {
+				resolve();
+			}
+		});
 }

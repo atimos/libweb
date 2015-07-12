@@ -3,7 +3,8 @@
 import IterExt from '../iterext/iterext';
 
 let uuid = require('../lib/node-uuid/uuid.js', 'min'),
-	Promise = require('../lib/bluebird/bluebird.js');
+	Promise = require('../lib/bluebird/bluebird.js'),
+	Stream = require('../lib/streamjs/stream.js');
 
 let _store = Symbol('store'),
 	_trans = Symbol('trans'),
@@ -68,22 +69,18 @@ export default function(name, version) {
 						has(store_name) {
 							return (evt.target.objectStoreNames[store_name] !== undefined);
 						},
-						get(store_list, mode = 'readonly') {
+						get(store_list = [], mode = 'readonly') {
 							return new Promise(resolve => {
-								let transaction = evt.target.result.transaction(Array.isArray(store_list) ? store_list : [store_list], mode);
+								let transaction = evt.target.result.transaction(store_list, mode);
 
-								if ( Array.isArray(store_list) ) {
-									let store_map = new Map();
+								let store_map = new Map();
 
-									store_list
-										.forEach(name => {
-											store_map.set(name, new Store(transaction.objectStore(name), config_map.get(name)));
-										});
+								store_list
+									.forEach(name => {
+										store_map.set(name, new Store(transaction.objectStore(name), config_map.get(name)));
+									});
 
-									resolve(store_map);
-								} else {
-									resolve(new Store(transaction.objectStore(store_list), config_map.get(store_list)));
-								}
+								resolve(store_map);
 							});
 						},
 						delete_database() {
@@ -119,7 +116,7 @@ class Store {
 		return new Index(this[_store].index(name));
 	}
 
-	get(keys) {
+	get(keys = []) {
 		return get_from_store(this[_store], this[_store].transaction, 'get', keys);
 	}
 
@@ -145,7 +142,7 @@ class Store {
 
 			this[_store].clear()
 				.addEventListener('success', evt => {
-					resolve(evt.target.result);
+					resolve();
 				});
 		});
 	}
@@ -156,16 +153,12 @@ class Index {
 		this[_index] = index;
 	}
 
-	get(keys) {
+	get(keys = []) {
 		return get_from_store(this[_index], this[_index].objectStore.transaction, 'get', keys);
 	}
 
-	getKey(keys) {
-		return get_from_store(this[_index], this[_index].objectStore.transaction, 'getKey', keys);
-	}
-
 	range(...args) {
-		return new IndexRange(this[_index].objectStore.transaction, this[_index], ...args);
+		return new Range(this[_index].objectStore.transaction, this[_index], ...args);
 	}
 }
 
@@ -198,7 +191,7 @@ class Range {
 
 			this[_store].openCursor(this[_range], direction)
 				.addEventListener('success', evt => {
-					fn(evt.target.result || null);
+					fn(evt.target.result || null, evt.target);
 				});
 		});
 	}
@@ -215,140 +208,83 @@ class Range {
 	}
 }
 
-class IndexRange extends Range {
-	keyCursor(fn, direction = 'next') {
-		return new Promise((resolve, reject) => {
-			add_transaction_handler(this[_trans], reject, resolve);
-
-			this[_store].openKeyCursor(this[_range], direction)
-				.addEventListener('success', evt => {
-					fn(evt.target.result || null);
-				});
-		});
-	}
-}
-
-function update_store(action, items, key = undefined) {
+function update_store(action, items = []) {
 	return new Promise((resolve, reject) => {
-		let result, key_path = this[_cfg].keyPath, key_gen = this[_cfg].key_gen;
-
-		if ( Array.isArray(items) ) {
+		let result,
+			key_path = this[_cfg].keyPath,
+			key_gen = this[_cfg].key_gen,
 			result = [];
-			add_transaction_handler(this[_store].transaction, reject, resolve, result);
-		} else {
-			result = null;
-			add_transaction_handler(this[_store].transaction, reject);
-		}
 
-		if ( Array.isArray(items) ) {
-			if ( action === 'delete' ) {
-				items
-					.forEach(key => {
-						this[_store][action](key).addEventListener('success', () => {
-							result.push(key);
-						});
-					});
-			} else if ( key_path === undefined && key_gen === undefined ) {
-				items
-					.forEach(item => {
-						this[_store][action](item.value, item.key).addEventListener('success', evt => {
-							resolve({key: evt.target.result, value: item.value});
-						});
-					});
-			} else if ( key_path === undefined && key_gen !== undefined ) {
-				items
-					.forEach(item => {
+		add_transaction_handler(this[_store].transaction, reject, resolve, result);
 
-						if ( item.key === undefined ) {
-							item.key = key_gen(item.value);
-						}
-
-						this[_store][action](item.value, item.key).addEventListener('success', evt => {
-							resolve({key: evt.target.result, value: item.value});
-						});
+		if ( action === 'delete' ) {
+			items
+				.forEach(key => {
+					this[_store][action](key).addEventListener('success', () => {
+						result.push(key);
 					});
-			} else if ( key_path !== undefined && key_gen === undefined ) {
-				items
-					.forEach(item => {
-						this[_store][action](item).addEventListener('success', evt => {
-							item[evt.target.source.keyPath] = evt.target.result;
-							result.push(item);
-						});
-					});
-			} else if ( key_path !== undefined && key_gen !== undefined ) {
-				items
-					.forEach(item => {
-						if ( item[key_path] === undefined ) {
-							item[key_path] = key_gen(item);
-						}
-
-						this[_store][action](item).addEventListener('success', evt => {
-							item[evt.target.source.keyPath] = evt.target.result;
-							result.push(item);
-						});
-					});
-			}
-		} else {
-			if ( action === 'delete' ) {
-				this[_store][action](items).addEventListener('success', () => {
-					resolve(items);
 				});
-			} else {
-				if ( key_path === undefined ) {
-					if ( key === undefined && key_gen !== undefined ) {
-						key = key_gen(items);
+		} else if ( key_path === undefined && key_gen === undefined ) {
+			items
+				.forEach(item => {
+					this[_store][action](item.value, item.key).addEventListener('success', evt => {
+						resolve({key: evt.target.result, value: item.value});
+					});
+				});
+		} else if ( key_path === undefined && key_gen !== undefined ) {
+			items
+				.forEach(item => {
+					if ( item.key === undefined ) {
+						item.key = key_gen(item.value);
 					}
 
-					this[_store][action](items, key).addEventListener('success', evt => {
-						resolve({key: evt.target.result, value: items});
+					this[_store][action](item.value, item.key).addEventListener('success', evt => {
+						resolve({key: evt.target.result, value: item.value});
 					});
-				} else {
-					if ( items[key_path] === undefined && key_gen !== undefined ) {
-						items[key_path] = key_gen(items);
+				});
+		} else if ( key_path !== undefined && key_gen === undefined ) {
+			items
+				.forEach(item => {
+					this[_store][action](item).addEventListener('success', evt => {
+						item[evt.target.source.keyPath] = evt.target.result;
+						result.push(item);
+					});
+				});
+		} else if ( key_path !== undefined && key_gen !== undefined ) {
+			items
+				.forEach(item => {
+					if ( item[key_path] === undefined ) {
+						item[key_path] = key_gen(item);
 					}
 
-					this[_store][action](items).addEventListener('success', evt => {
-						items[evt.target.source.keyPath] = evt.target.result;
-						resolve(items);
+					this[_store][action](item).addEventListener('success', evt => {
+						item[evt.target.source.keyPath] = evt.target.result;
+						result.push(item);
 					});
-				}
-			}
+				});
 		}
 	});
 }
 
 function get_from_store(store, transaction, action, keys) {
 	return new Promise((resolve, reject) => {
-		if ( Array.isArray(keys) ) {
-			let result = new Map();
+		let result = new Map();
 
-			add_transaction_handler(transaction, reject, resolve, result);
+		add_transaction_handlen(transaction, reject, resolve, result);
 
-			keys
-				.forEach(key => {
-					if ( result.has(key) === false ) {
-						store[action](key)
-							.addEventListener('success', evt => {
-								if ( evt.target.result !== undefined ) {
-									result.set(key, evt.target.result);
-								} else {
-									result.set(key, null);
-								}
-							});
-					}
-				});
-		} else {
-			add_transaction_handler(transaction, reject);
-
-			store[action](keys)
-				.addEventListener('success', evt => {
-					if ( evt.target.result !== undefined ) {
-						resolve(evt.target.result);
-					} else {
-						resolve(null);
-					}
-				});
-		}
+		keys
+			.forEach(key => {
+				if ( result.has(key) === false ) {
+					store[action](key)
+						.addEventListener('success', evt => {
+							if ( evt.target.result !== undefined ) {
+								result.set(key, evt.target.result);
+							} else {
+								result.set(key, null);
+							}
+						});
+				}
+			});
 	});
 }
 
@@ -362,7 +298,7 @@ function add_transaction_handler(transaction, reject, resolve = null, result = n
 	if ( resolve !== null ) {
 		transaction.addEventListener('complete', () => {
 			if ( result !== null ) {
-				result = new IterExt(result);
+				result = Stream(result);
 			}
 
 			resolve(result);
