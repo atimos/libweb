@@ -1,17 +1,13 @@
 'use strict';
 
-let Promise = require('../lib/bluebird/bluebird.js'),
-	Lunr = require('../lib/lunr.js/lunr.js'),
-	Stream = require('../lib/streamjs/stream.js');
-
-let _cfg = Symbol('cfg'),
-	_index = Symbol('index');
+let Lunr = require('../lib/lunr.js/lunr.js'),
+	Rx = require('../lib/rxjs/dist/rx.all.js');
 
 export default function() {
 	let index_map = new Map();
 
 	return {
-		set: function(name, cfg) {
+		index: function(name, cfg) {
 			index_map.set(name, cfg);
 			return this;
 		},
@@ -29,76 +25,111 @@ export default function() {
 
 class Index {
 	constructor(cfg) {
-		this[_index] = null;
-		this[_cfg] = cfg;
+		this['index'] = null;
+		this['cfg'] = cfg;
 		this.clear();
 	}
 
-	put(items) {
-		return update_index('update', items, this[_index]);
+	put(item) {
+		return update_index.call(this, 'update', [item]);
 	}
 
-	add(items) {
-		return update_index('add', items, this[_index]);
+	post(item) {
+		return update_index.call(this, 'add', [item]);
 	}
 
-	delete(id_list) {
-			let ref = this[_cfg].ref;
+	post_transaction(item) {
+		return update_index.call(this, 'add', [item], true);
+	}
 
-			return update_index('remove', id_list.map(id => {
+	put_list(items) {
+		return update_index.call(this, 'update', items);
+	}
+
+	post_list(items) {
+		return update_index.call(this, 'add', items);
+	}
+
+	post_list_transaction(item) {
+		return update_index.call(this, 'add', item, true);
+	}
+
+	delete(keys = []) {
+			let ref = this['cfg'].ref;
+			return update_index.call(this, 'remove', (Array.isArray(keys) ? keys : [keys]).map(id => {
 				return {[ref]: id};
-			}), this[_index]);
+			}));
 	}
 
 	search(query) {
-		return Promise.resolve(Stream(this[_index].search(query)));
+		return Rx.Observable.create(observer => {
+			this['index'].search(query).forEach(observer.onNext.bind(observer));
+			observer.onCompleted();
+		});
 	}
 
 	clear() {
 		return new Promise(resolve => {
-			this[_index] = Lunr(function() {
-				this.ref(this[_cfg].ref);
+			let cfg = this['cfg'];
 
-				this[_cfg].fields
+			this['index'] = Lunr(function() {
+				this.ref(cfg.ref);
+
+				cfg.fields
 					.map(field => {
 						this.field(field.name, {boost: field.boost||0});
 					});
 			});
 
-			resolve(this);
-		});
-	}
-
-	raw_set_data(data) {
-		return new Promise(resolve => {
-			this[_index] = Lunr.Index.load(data);
 			resolve();
 		});
 	}
 
-	raw_get_data() {
+	from_raw(data) {
 		return new Promise(resolve => {
-			resolve(JSON.parse(JSON.stringify(this[_index])));
+			this['index'] = Lunr.Index.load(data);
+			resolve();
 		});
+	}
+
+	to_raw_json() {
+		return new Promise(resolve => {
+			resolve(JSON.stringify(this['index']));
+		});
+	}
+
+	to_raw() {
+		return this.to_raw_json()
+			.then(data => {
+				return JSON.parse(data);
+			});
 	}
 }
 
-function update_index(action, data, index) {
-		return new Promise((resolve, reject) => {
-			let failed = [];
+function update_index(action, data, transaction = false) {
+	return Rx.Observable.create(observer => {
+		let index = this['index'];
 
-			data.forEach(item => {
-				try {
-					index[action](item);
-				} catch (err) {
-					failed.push({data: item, error: err});
+		for ( let [item_index, item] of data.entries() ) {
+			try {
+				if ( action === 'add' && index.documentStore.has(item[this['cfg'].ref]) ) {
+					throw new Error('Id already exists');
 				}
-			});
 
-			if ( failed.length > 0 ) {
-				reject(failed);
-			} else {
-				resolve();
+				index[action](item);
+				observer.onNext(item);
+			} catch (err) {
+				if ( transaction === true ) {
+					if ( action === 'add' ) {
+						data.slice(0, item_index).forEach(index.remove.bind(index));
+					}
+				}
+
+				err.data = item;
+				return observer.onError(err);
 			}
-		});
+		}
+
+		observer.onCompleted();
+	});
 }

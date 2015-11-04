@@ -131,7 +131,7 @@ class Store {
 				.forEach(key => {
 					store.get(key)
 						.addEventListener('success', evt => {
-							observer.onNext(new Item(key, evt.target.result));
+							observer.onNext(new Entry(key, evt.target.result));
 						});
 				});
 		});
@@ -149,11 +149,14 @@ class StoreMut extends Store {
 		return store;
 	}
 
-	delete(key) {
+	delete(keys = []) {
 		return get_store_observer(this, (store, observer) => {
-			store.delete(key)
-				.addEventListener('success', evt => {
-					observer.onNext(new Item(key, null));
+			(Array.isArray(keys) ? keys : [keys])
+				.forEach(key => {
+					store.delete(key)
+						.addEventListener('success', evt => {
+							observer.onNext(new Entry(key, null));
+						});
 				});
 		});
 	}
@@ -164,7 +167,7 @@ class StoreMut extends Store {
 
 			store.add(data, id)
 				.addEventListener('success', evt => {
-					observer.onNext(new Item(evt.target.result, data));
+					observer.onNext(new Entry(evt.target.result, data));
 				});
 		});
 	}
@@ -176,7 +179,7 @@ class StoreMut extends Store {
 
 				store.add(data, id)
 					.addEventListener('success', evt => {
-						observer.onNext(new Item(evt.target.result, data));
+						observer.onNext(new Entry(evt.target.result, data));
 					});
 			});
 		});
@@ -188,7 +191,7 @@ class StoreMut extends Store {
 
 			store.put(data, id)
 				.addEventListener('success', evt => {
-					observer.onNext(new Item(evt.target.result, data));
+					observer.onNext(new Entry(evt.target.result, data));
 				});
 		});
 	}
@@ -200,7 +203,7 @@ class StoreMut extends Store {
 
 				store.put(data, id)
 					.addEventListener('success', evt => {
-						observer.onNext(new Item(evt.target.result, data));
+						observer.onNext(new Entry(evt.target.result, data));
 					});
 			});
 		});
@@ -242,7 +245,7 @@ class Range {
 					if ( cursor !== null ) {
 						observer.observer.cursor = this['get_cursor'](cursor);
 
-						observer.onNext(new Item(cursor.primaryKey, cursor.value, cursor.key));
+						observer.onNext(new Entry(cursor.primaryKey, cursor.value, cursor.key));
 
 						if ( evt.target.readyState !== 'pending' ) {
 							cursor.continue();
@@ -280,7 +283,7 @@ class RangeMut extends Range {
 	}
 }
 
-class Item {
+class Entry {
 	constructor(primary_key, data, key = null) {
 		this['_primary_key'] = primary_key;
 		this['data'] = data;
