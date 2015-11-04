@@ -14,3 +14,7 @@
 	path = lib/streamjs
 	url = https://github.com/winterbe/streamjs.git
 	branch = master
+[submodule "lib/rxjs"]
+	path = lib/rxjs
+	url = https://github.com/Reactive-Extensions/RxJS.git
+	branch = master
