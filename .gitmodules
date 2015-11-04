@@ -10,10 +10,6 @@
 	path = lib/node-uuid
 	url = https://github.com/broofa/node-uuid.git
 	branch = master
-[submodule "lib/streamjs"]
-	path = lib/streamjs
-	url = https://github.com/winterbe/streamjs.git
-	branch = master
 [submodule "lib/rxjs"]
 	path = lib/rxjs
 	url = https://github.com/Reactive-Extensions/RxJS.git
