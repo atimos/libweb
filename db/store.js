@@ -1,5 +1,3 @@
-'use strict';
-
 import indexeddb from './indexeddb';
 import fulltext from './fulltext';
 

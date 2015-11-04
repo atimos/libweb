@@ -1,5 +1,3 @@
-'use strict';
-
 let uuid = require('../lib/node-uuid/uuid.js'),
 	Rx = require('../lib/rxjs/dist/rx.all.js');
 

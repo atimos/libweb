@@ -1,5 +1,3 @@
-'use strict';
-
 let Lunr = require('../lib/lunr.js/lunr.js'),
 	Rx = require('../lib/rxjs/dist/rx.all.js');
 
