@@ -59,11 +59,24 @@ class Index {
 			}));
 	}
 
-	search(query) {
-		return Rx.Observable.create(observer => {
-			this['index'].search(query).forEach(observer.onNext.bind(observer));
+	search(query, limit = null) {
+		let search_result = Rx.Observable.create(observer => {
+			for ( [index, entry] of this['index'].search(query).entries() ) {
+				if ( observer.isStopped || ( limit !== null && index >= limit ) ) {
+					break;
+				}
+
+				observer.onNext(entry);
+			}
+
 			observer.onCompleted();
 		});
+
+		if ( limit !== null ) {
+			return search_result.take(limit);
+		}
+
+		return search_result;
 	}
 
 	clear() {

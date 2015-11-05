@@ -1,6 +1,18 @@
 let uuid = require('../lib/node-uuid/uuid.js'),
 	Rx = require('../lib/rxjs/dist/rx.all.js');
 
+export function delete_database(name) {
+	return new Promise((resolve, reject) => {
+		let db_request = window.indexedDB.deleteDatabase(name);
+
+		db_request.addEventListener('success', resolve);
+
+		db_request.addEventListener('error', evt => {
+			reject(evt.target.error);
+		});
+	});
+};
+
 export default (db_name, db_version = null) => {
 	let db_cfg = new Map();
 
@@ -62,17 +74,6 @@ export default (db_name, db_version = null) => {
 						},
 						store_mut(name) {
 							return StoreMut.with_db(name, db_cfg.get(name), evt.target.result);
-						},
-						delete_database() {
-							return new Promise((resolve, reject) => {
-								let db_request = window.indexedDB.deleteDatabase(name);
-
-								db_request.addEventListener('success', resolve);
-
-								db_request.addEventListener('error', evt => {
-									reject(evt.target.error);
-								});
-							});
 						},
 						clear_store(name) {
 							return new Promise((resolve, reject) => {

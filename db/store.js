@@ -5,7 +5,8 @@ let Rx = require('../lib/rxjs/dist/rx.all.js');
 
 export default (db_name, version, index_store_name) => {
 	let index = fulltext(),
-		db = indexeddb(db_name, version);
+		db = indexeddb(db_name, version),
+		store_set = new Set();
 
 	return {
 		index(...args) {
@@ -13,6 +14,7 @@ export default (db_name, version, index_store_name) => {
 			return this;
 		},
 		store(...args) {
+			store_set.add(args[0]);
 			db.store(...args);
 			return this;
 		},
@@ -32,7 +34,11 @@ export default (db_name, version, index_store_name) => {
 							}, reject, () => {
 								resolve({
 									store(store_name) {
-										return new Store(store_name, db.store_mut(store_name), index.get(store_name), db.store_mut(index_store_name));
+										if ( store_set.has(store_name) ) {
+											return new Store(store_name, index_store_name, db, index);
+										}
+
+										throw new Error('Store not found');
 									}
 								});
 							});
@@ -43,11 +49,12 @@ export default (db_name, version, index_store_name) => {
 }
 
 class Store {
-	constructor(name, store, index, index_store) {
+	constructor(name, index_store_name, db, index) {
 		this['name'] = name;
-		this['store'] = store;
-		this['index'] = index;
-		this['index_store'] = index_store;
+		this['db'] = db;
+		this['store'] = db.store_mut(name);
+		this['index'] = index.get(name);
+		this['index_store'] = db.store_mut(index_store_name);
 	}
 
 	get(...args) {
@@ -127,29 +134,36 @@ class Store {
 		}
 	}
 
-	search(...args) {
-		return this['index'].search(...args)
-			.map(index_entry => {
-				return this['store'].get(index_entry.ref)
-					.map(store_entry => {
-						return wrap_entry(store_entry, index_entry.score);
-					});
-			})
-			.concatAll();
+	search(query, limit = null) {
+		return Rx.Observable.create(observer => {
+			let onError = observer.onError.bind(observer);
+
+			if ( this['index'] === undefined ) {
+				return onError(new Error('Store "' + this['name'] + '" has no index'));
+			}
+
+			this['index'].search(query, limit).toArray()
+				.subscribe(index_result => {
+					let score_map = new Map(),
+						ref_array = [];
+
+					for ( entry of index_result ) {
+						score_map.set(entry.ref, entry.score);
+						ref_array.push(entry.ref);
+					}
+
+					this['store'].get(ref_array)
+						.subscribe(entry => {
+							add_score(entry, score_map.get(entry.key()));
+							observer.onNext(entry);
+						}, onError, observer.onCompleted.bind(observer));
+				}, onError)
+		});
 	}
 }
 
-function wrap_entry(entry, score) {
-	let proxy = new Proxy(entry, {
-		get: (target, name) => {
-			if ( name === 'score' ) {
-				return () => {
-					return score;
-				};
-			} else {
-				return entry[name];
-			}
-		},
-	});
-	return proxy;
+function add_score(entry, score) {
+	entry.score = () => {
+		return score;
+	};
 }
