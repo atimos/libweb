@@ -29,7 +29,7 @@ export default (db_name, version, index_store_name) => {
 							.cursor()
 							.subscribe(entry => {
 								if ( index.has(entry.key()) ) {
-									index.get(entry.key()).from_raw(entry.raw())
+									index.get(entry.key()).from_raw(entry.to_raw()).subscribe();
 								}
 							}, reject, () => {
 								resolve({
@@ -52,86 +52,89 @@ class Store {
 	constructor(name, index_store_name, db, index) {
 		this['name'] = name;
 		this['db'] = db;
-		this['store'] = db.store_mut(name);
 		this['index'] = index.get(name);
 		this['index_store'] = db.store_mut(index_store_name);
+		
 	}
 
 	get(...args) {
-		return this['store'].get(...args);
+		return this['db'].store(this['name']).get(...args);
 	}
 
 	range(...args) {
-		return this['store'].range(...args);
+		return this['db'].store(this['name']).range(...args);
 	}
 
 	put(...args) {
+		let action = this['db'].store_mut(this['name']).put(...args);
+
 		if ( this['index'] ) {
-			return this['store'].put(...args)
-				.map(item => {
+				action.map(entry => {
 					return this['index'].put(args[0])
 						.map(() => {
-							return item;
+							return entry;
 						});
 				})
 				.concatAll()
 				.doOnCompleted(() => {
 					return Rx.Observable.fromPromise(new Promise((resolve, reject) => {
 						this['index'].to_raw()
-						.then(data => {
+						.subscribe(data => {
 								this['index_store'].put(data, this['name']).subscribe(undefined, reject, resolve);
 							})
 					}));
 				});
-		} else {
-			return this['store'].put(...args);
 		}
+
+		return action;
 	}
 
 	post(...args) {
+		let action = this['db'].store_mut(this['name']).post(...args);
+
 		if ( this['index'] ) {
-			return this['store'].post(...args)
-				.map(item => {
+				action.map(entry => {
 					return this['index'].post(args[0])
 						.map(() => {
-							return item;
+							return entry;
 						});
 				})
 				.concatAll()
 				.doOnCompleted(() => {
 					return Rx.Observable.fromPromise(new Promise((resolve, reject) => {
 						this['index'].to_raw()
-						.then(data => {
+						.subscribe(data => {
 								this['index_store'].put(data, this['name']).subscribe(undefined, reject, resolve);
 							})
 					}));
 				});
-		} else {
-			return this['store'].post(...args);
 		}
+
+		return action;
 	}
 
 	delete(...args) {
+		let action = this['db'].store_mut(this['name']).delete(...args);
+
 		if ( this['index'] ) {
-			return this['store'].delete(...args)
-				.map(item => {
+				action.map(entry => {
 					return this['index'].delete(args[0])
 						.map(() => {
-							return item;
+							return entry;
 						});
 				})
 				.concatAll()
 				.doOnCompleted(() => {
 					return Rx.Observable.fromPromise(new Promise((resolve, reject) => {
 						this['index'].to_raw()
-						.then(data => {
+						.subscribe(data => {
 								this['index_store'].put(data, this['name']).subscribe(undefined, reject, resolve);
 							})
 					}));
 				});
-		} else {
-			return this['store'].post(...args);
 		}
+
+		return action;
 	}
 
 	search(query, limit = null) {
@@ -152,12 +155,62 @@ class Store {
 						ref_array.push(entry.ref);
 					}
 
-					this['store'].get(ref_array)
+					this['db'].store(this['name']).get(ref_array)
 						.subscribe(entry => {
 							add_score(entry, score_map.get(entry.key()));
 							observer.onNext(entry);
 						}, onError, observer.onCompleted.bind(observer));
 				}, onError)
+		});
+	}
+
+	clear() {
+		return Rx.Observable.create(observer => {
+			this['index'].clear()
+				.subscribe(() => {
+					this['db'].clear_store(this['name'])
+						.subscribe(() => {
+							this['index_store'].delete(this['name'])
+								.subscribe(
+									observer.onNext.bind(observer),
+									observer.onError.bind(observer),
+									observer.onCompleted.bind(observer)
+								);
+						}, observer.onError.bind(observer));
+				}, observer.onError.bind(observer));
+		});
+	}
+
+	rebuild_index() {
+		return Rx.Observable.create(observer => {
+			let onError = observer.onError.bind(observer);
+
+			this['index'].clear()
+				.subscribe(() => {
+					this['db'].store(this['name']).range().cursor()
+						.map(entry => {
+							return entry.to_raw()
+						})
+						.toArray()
+						.map(list => {
+							return this['index'].post_list_transaction(list);
+						})
+						.concatAll()
+						.toArray()
+						.map(() => {
+							return this['index'].to_raw();
+						})
+						.concatAll()
+						.map(data => {
+							return this['index_store'].put(data, this['name']);
+						})
+						.concatAll()
+						.subscribe(undefined, onError, () => {
+							observer.onNext();
+							observer.onCompleted();
+						});
+				}, onError);
+
 		});
 	}
 }

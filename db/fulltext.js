@@ -28,28 +28,28 @@ class Index {
 		this.clear();
 	}
 
-	put(item) {
-		return update_index.call(this, 'update', [item]);
+	put(entry) {
+		return update_index.call(this, 'update', [entry]);
 	}
 
-	post(item) {
-		return update_index.call(this, 'add', [item]);
+	post(entry) {
+		return update_index.call(this, 'add', [entry]);
 	}
 
-	post_transaction(item) {
-		return update_index.call(this, 'add', [item], true);
+	post_transaction(entry) {
+		return update_index.call(this, 'add', [entry], true);
 	}
 
-	put_list(items) {
-		return update_index.call(this, 'update', items);
+	put_list(entries) {
+		return update_index.call(this, 'update', entries);
 	}
 
-	post_list(items) {
-		return update_index.call(this, 'add', items);
+	post_list(entries) {
+		return update_index.call(this, 'add', entries);
 	}
 
-	post_list_transaction(item) {
-		return update_index.call(this, 'add', item, true);
+	post_list_transaction(entries) {
+		return update_index.call(this, 'add', entries, true);
 	}
 
 	delete(keys = []) {
@@ -80,7 +80,7 @@ class Index {
 	}
 
 	clear() {
-		return new Promise(resolve => {
+		return Rx.Observable.create(observer => {
 			let cfg = this['cfg'];
 
 			this['index'] = Lunr(function() {
@@ -91,27 +91,29 @@ class Index {
 						this.field(field.name, {boost: field.boost||0});
 					});
 			});
-
-			resolve();
+			observer.onNext();
+			observer.onCompleted();
 		});
 	}
 
 	from_raw(data) {
-		return new Promise(resolve => {
+		return Rx.Observable.create(observer => {
 			this['index'] = Lunr.Index.load(data);
-			resolve();
+			observer.onNext();
+			observer.onCompleted();
 		});
 	}
 
 	to_raw_json() {
-		return new Promise(resolve => {
-			resolve(JSON.stringify(this['index']));
+		return Rx.Observable.create(observer => {
+			observer.onNext(JSON.stringify(this['index']));
+			observer.onCompleted();
 		});
 	}
 
 	to_raw() {
 		return this.to_raw_json()
-			.then(data => {
+			.map(data => {
 				return JSON.parse(data);
 			});
 	}
@@ -121,23 +123,24 @@ function update_index(action, data, transaction = false) {
 	return Rx.Observable.create(observer => {
 		let index = this['index'];
 
-		for ( let [item_index, item] of data.entries() ) {
+		for ( let [entry_index, entry] of data.entries() ) {
 			try {
-				if ( action === 'add' && index.documentStore.has(item[this['cfg'].ref]) ) {
-					throw new Error('Id already exists');
+				if ( action === 'add' && index.documentStore.has(entry[this['cfg'].ref]) ) {
+					throw new Error('Id ' + entry[this['cfg'].ref] + ' already exists');
 				}
 
-				index[action](item);
-				observer.onNext(item);
+				index[action](entry);
+				observer.onNext(entry);
 			} catch (err) {
 				if ( transaction === true ) {
 					if ( action === 'add' ) {
-						data.slice(0, item_index).forEach(index.remove.bind(index));
+						data.slice(0, entry_index).forEach(index.remove.bind(index));
 					}
 				}
 
-				err.data = item;
-				return observer.onError(err);
+				err.data = entry;
+				observer.onError(err);
+				break;
 			}
 		}
 

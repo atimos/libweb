@@ -76,16 +76,17 @@ export default (db_name, db_version = null) => {
 							return StoreMut.with_db(name, db_cfg.get(name), evt.target.result);
 						},
 						clear_store(name) {
-							return new Promise((resolve, reject) => {
+							return Rx.Observable.create(observer => {
 								let transaction = evt.target.result.transaction([name], 'readwrite');
 
 								transaction.addEventListener('error', evt => {
-									reject(evt.target.error);
+									observer.onError(evt.target.error);
 								});
 
 								transaction.objectStore(name).clear().addEventListener('success', evt => {
-									resolve();
-								});;
+									observer.onNext();
+									observer.onCompleted();
+								});
 							});
 						}
 					});
@@ -327,7 +328,7 @@ class Entry {
 		return false;
 	}
 
-	raw() {
+	to_raw() {
 		return this['data'];
 	}
 }
