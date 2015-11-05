@@ -1,5 +1,6 @@
-let Lunr = require('../lib/lunr.js/lunr.js'),
-	Rx = require('../lib/rxjs/dist/rx.all.js');
+import Rx from '../rxjs/rxjs';
+
+let Lunr = require('../lib/lunr.js/lunr.js');
 
 export default function() {
 	let index_map = new Map();

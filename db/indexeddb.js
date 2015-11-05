@@ -1,5 +1,6 @@
-let uuid = require('../lib/node-uuid/uuid.js'),
-	Rx = require('../lib/rxjs/dist/rx.all.js');
+import Rx from '../rxjs/rxjs';
+
+let uuid = require('../lib/node-uuid/uuid.js');
 
 export function delete_database(name) {
 	return new Promise((resolve, reject) => {

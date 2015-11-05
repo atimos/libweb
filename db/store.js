@@ -1,7 +1,6 @@
 import indexeddb from './indexeddb';
 import fulltext from './fulltext';
-
-let Rx = require('../lib/rxjs/dist/rx.all.js');
+import Rx from '../rxjs/rxjs';
 
 export default (db_name, version, index_store_name) => {
 	let index = fulltext(),
