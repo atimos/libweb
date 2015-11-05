@@ -9,7 +9,7 @@ export default (db_name, version, index_store_name) => {
 		store_set = new Set();
 
 	return {
-		index(...args) {
+		fulltext(...args) {
 			index.index(...args);
 			return this;
 		},
