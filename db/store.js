@@ -65,11 +65,19 @@ class Store {
 	}
 
 	put(...args) {
-		let action = this['db'].store_mut(this['name']).put(...args);
+		return this.put_list([args.shift()], ...args);
+	}
+
+	post(...args) {
+		return this.post_list([args.shift()], ...args);
+	}
+
+	put_list(...args) {
+		let action = this['db'].store_mut(this['name']).put_list(...args);
 
 		if ( this['index'] ) {
 				action.map(entry => {
-					return this['index'].put(args[0])
+					return this['index'].put_list(args[0])
 						.map(() => {
 							return entry;
 						});
@@ -88,12 +96,12 @@ class Store {
 		return action;
 	}
 
-	post(...args) {
+	post_list(...args) {
 		let action = this['db'].store_mut(this['name']).post(...args);
 
 		if ( this['index'] ) {
 				action.map(entry => {
-					return this['index'].post(args[0])
+					return this['index'].post_list_transaction(args[0])
 						.map(() => {
 							return entry;
 						});
