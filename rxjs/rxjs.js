@@ -1,3 +1,3 @@
-Rx = require('../lib/rxjs/dist/rx.all.js');
+Rx = require('../lib/rxjs/dist/rx.lite.js');
 
 export default Rx;
