@@ -26,6 +26,8 @@ class Index {
 	constructor(cfg) {
 		this['index'] = null;
 		this['cfg'] = cfg;
+
+		this.fields = cfg.fields.map(field => { return field.name; });
 		this.clear();
 	}
 

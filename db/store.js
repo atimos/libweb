@@ -53,7 +53,8 @@ class Store {
 		this['db'] = db;
 		this['index'] = index.get(name);
 		this['index_store'] = db.store_mut(index_store_name);
-		
+
+		this.fulltext = this['index'].fields;
 	}
 
 	get(...args) {
