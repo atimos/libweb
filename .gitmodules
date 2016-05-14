@@ -10,7 +10,7 @@
 	path = lib/node-uuid
 	url = https://github.com/broofa/node-uuid.git
 	branch = master
-[submodule "lib/rxjs"]
-	path = lib/rxjs
-	url = https://github.com/Reactive-Extensions/RxJS.git
+[submodule "lib/zen-observable"]
+	path = lib/zen-observable
+	url = https://github.com/zenparsing/zen-observable.git
 	branch = master
